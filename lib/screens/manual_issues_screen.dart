@@ -654,12 +654,21 @@ List<ManualIssue> _roomAvailabilityIssues(
           )
           .map((session) => session.id)
           .toList();
-      if (_hasRoomIssueFor(issues, affected, room.name)) continue;
+      final closureLabel =
+          '${controller.dayName(closure.day)} ${_time(closure.startMinute)}–${_time(closure.endMinute)}';
+      if (_hasRoomIssueFor(
+        issues,
+        affected,
+        room.name,
+        timeLabel: affected.isEmpty ? closureLabel : null,
+      )) {
+        continue;
+      }
       issues.add(
         ManualIssue(
           code: 'ROOM_UNAVAILABLE',
           message:
-              '${room.name} is closed for ${controller.dayName(closure.day)} ${_time(closure.startMinute)}–${_time(closure.endMinute)}${closure.reason.isEmpty ? '' : ': ${closure.reason}'}.',
+              '${room.name} is closed for $closureLabel${closure.reason.isEmpty ? '' : ': ${closure.reason}'}.',
           sessionIds: affected,
         ),
       );
@@ -671,10 +680,12 @@ List<ManualIssue> _roomAvailabilityIssues(
 bool _hasRoomIssueFor(
   List<ManualIssue> issues,
   List<String> affected,
-  String roomName,
-) {
+  String roomName, {
+  String? timeLabel,
+}) {
   for (final issue in issues) {
     if (!issue.message.contains(roomName)) continue;
+    if (timeLabel != null && !issue.message.contains(timeLabel)) continue;
     if (affected.isEmpty || issue.sessionIds.any(affected.contains)) {
       return true;
     }
