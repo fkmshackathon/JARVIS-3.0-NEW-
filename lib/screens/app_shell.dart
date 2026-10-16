@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../brand/synchro_mark.dart';
+import '../state/demo_auth.dart';
 import '../state/scheduling_controller.dart';
 import '../theme/theme_controller.dart';
 import '../theme/tokens.dart';
@@ -27,6 +28,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+  final DemoAuth _auth = DemoAuth();
 
   static const List<_Destination> _destinations = [
     _Destination('Home', Icons.home_outlined, Icons.home),
@@ -39,6 +41,12 @@ class _AppShellState extends State<AppShell> {
   ];
 
   SchedulingController get controller => widget.controller;
+
+  @override
+  void dispose() {
+    _auth.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,8 +137,10 @@ class _AppShellState extends State<AppShell> {
   void _openAccount() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            AccountScreen(onBack: () => Navigator.of(context).pop()),
+        builder: (_) => AccountScreen(
+          auth: _auth,
+          onBack: () => Navigator.of(context).pop(),
+        ),
       ),
     );
   }
