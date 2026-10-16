@@ -1,0 +1,6 @@
+# SYNCHRO backend. Pinned to what was verified on this machine (Python 3.14).
+ortools==9.15.6755
+fastapi==0.143.3
+uvicorn[standard]==0.54.0
+httpx==0.28.1
+pytest==9.1.1

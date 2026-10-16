@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mirrors drawable/launch_background.xml: API 21+ must not fall back to the
+     theme's colourBackground, which is white in light mode and black in dark. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_launcher_background" />
+</layer-list>
