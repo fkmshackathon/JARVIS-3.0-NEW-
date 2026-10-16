@@ -1,12 +1,13 @@
-# Reproducible two-process demo image: FastAPI on :8000 and the Flutter web
-# build on :8080. The Flutter client still talks to the existing API contract.
+# Reproducible two-process compatibility image: FastAPI on :8000 and the
+# Flutter web build on :8080. The current frontend workflow is local-only; the
+# API remains available for preserved backend regression work.
 FROM ghcr.io/cirruslabs/flutter:3.47.1 AS flutter-build
 
 WORKDIR /workspace
 COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 COPY . .
-RUN flutter build web --release --dart-define=SYNCHRO_API=http://localhost:8000
+RUN flutter build web --release
 
 FROM python:3.14.7-slim-bookworm AS runtime
 

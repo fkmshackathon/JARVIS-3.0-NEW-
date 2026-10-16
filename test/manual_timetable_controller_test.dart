@@ -1,46 +1,94 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:synchro/state/manual_timetable_controller.dart';
 
 void main() {
-  test('manual draft supports add, edit, move, delete and save/discard', () {
-    final controller = ManualTimetableController();
-    final originalCount = controller.sessions.length;
-    final first = controller.sessions.first;
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-    final added = controller.addSession(
-      ManualSession(
-        id: '',
-        subjectId: controller.subjects.first.id,
-        facultyId: controller.faculty.first.id,
-        batchId: controller.batches.first.id,
-        roomId: controller.rooms.first.id,
-        day: 5,
-        startMinute: 900,
-        endMinute: 960,
-      ),
+  test(
+    'manual draft supports add, edit, move, delete and save/discard',
+    () async {
+      final controller = ManualTimetableController();
+      final originalCount = controller.sessions.length;
+      final first = controller.sessions.first;
+
+      final added = controller.addSession(
+        ManualSession(
+          id: '',
+          subjectId: controller.subjects.first.id,
+          facultyId: controller.faculty.first.id,
+          batchId: controller.batches.first.id,
+          roomId: controller.rooms.first.id,
+          day: 5,
+          startMinute: 900,
+          endMinute: 960,
+        ),
+      );
+      expect(controller.sessions.length, originalCount + 1);
+      expect(controller.hasUnsavedChanges, isTrue);
+
+      expect(
+        controller.editSession(added.id, note: 'Moved for seminar'),
+        isTrue,
+      );
+      expect(
+        controller.moveSession(
+          added.id,
+          day: 4,
+          startMinute: 960,
+          endMinute: 1020,
+        ),
+        isTrue,
+      );
+      expect(controller.sessionById(added.id)?.day, 4);
+
+      await controller.saveDraft();
+      expect(controller.hasUnsavedChanges, isFalse);
+      expect(controller.deleteSession(first.id), isTrue);
+      expect(controller.hasUnsavedChanges, isTrue);
+      controller.discardDraft();
+      expect(controller.sessionById(first.id), isNotNull);
+      expect(controller.sessionById(added.id), isNotNull);
+    },
+  );
+
+  test('a saved local draft restores into a new controller', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final source = ManualTimetableController();
+    source.loadConflictDemo();
+    source.editSession(
+      source.sessions.first.copyWith(note: 'Persisted local note'),
     );
-    expect(controller.sessions.length, originalCount + 1);
-    expect(controller.hasUnsavedChanges, isTrue);
 
-    expect(controller.editSession(added.id, note: 'Moved for seminar'), isTrue);
+    await source.saveDraft();
+
+    final restored = ManualTimetableController();
+    await restored.restoreDraft();
+
+    expect(restored.dataLabel, ManualTimetableController.conflictScenarioLabel);
+    expect(restored.sessions.length, source.sessions.length);
     expect(
-      controller.moveSession(
-        added.id,
-        day: 4,
-        startMinute: 960,
-        endMinute: 1020,
-      ),
-      isTrue,
+      restored.sessions
+          .firstWhere((session) => session.id == source.sessions.first.id)
+          .note,
+      'Persisted local note',
     );
-    expect(controller.sessionById(added.id)?.day, 4);
+    expect(restored.hasUnsavedChanges, isFalse);
+    expect(restored.isRestoring, isFalse);
+  });
 
-    controller.saveDraft();
+  test('malformed local storage leaves the clean demo usable', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'synchro.manual-draft.v1': '{not valid json',
+    });
+    final controller = ManualTimetableController();
+
+    await controller.restoreDraft();
+
+    expect(controller.sessions, isNotEmpty);
+    expect(controller.dataLabel, ManualTimetableController.sampleDataLabel);
     expect(controller.hasUnsavedChanges, isFalse);
-    expect(controller.deleteSession(first.id), isTrue);
-    expect(controller.hasUnsavedChanges, isTrue);
-    controller.discardDraft();
-    expect(controller.sessionById(first.id), isNotNull);
-    expect(controller.sessionById(added.id), isNotNull);
+    expect(controller.isRestoring, isFalse);
   });
 
   test('manual validation detects teacher, room and batch overlap', () {

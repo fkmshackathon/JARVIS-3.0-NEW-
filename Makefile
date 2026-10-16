@@ -12,7 +12,7 @@ analyze:
 	flutter analyze
 
 build-web:
-	flutter build web --release --dart-define=SYNCHRO_API=http://localhost:8000
+	flutter build web --release
 
 build-apk:
 	flutter build apk --release

@@ -247,13 +247,17 @@ class _LocalDraftBanner extends StatelessWidget {
         const SizedBox(width: SynchroSpacing.sm),
         Expanded(
           child: Text(
-            ManualTimetableController.sampleDataLabel,
+            controller.dataLabel,
             style: Theme.of(context).textTheme.labelSmall
                 ?.copyWith(color: SynchroColors.navyDeep),
           ),
         ),
         Text(
-          controller.hasUnsavedChanges ? 'Draft' : 'Saved',
+          controller.hasLocalValidation
+              ? 'Locally checked'
+              : controller.hasUnsavedChanges
+              ? 'Draft'
+              : 'Not checked',
           style: Theme.of(context).textTheme.bodySmall
               ?.copyWith(color: SynchroColors.navyDeep),
         ),

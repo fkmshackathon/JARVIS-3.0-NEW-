@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'manual_timetable_models.dart';
 
@@ -6,10 +9,13 @@ export 'manual_timetable_models.dart';
 
 /// Owns the local, frontend-only draft used by the manual timetable editor.
 ///
-/// This controller intentionally has no API client and no persistence. It is a
-/// deterministic product prototype: a coordinator can try edits, inspect local
-/// hard conflicts and soft warnings, then save or discard the in-memory draft.
+/// This controller intentionally has no API client. It is a deterministic
+/// product prototype: a coordinator can try edits, inspect local hard conflicts
+/// and soft warnings, then save or discard a local draft. Persistence is limited
+/// to the device/browser through shared_preferences; it is not institutional data.
 class ManualTimetableController extends ChangeNotifier {
+  static const String _storageKey = 'synchro.manual-draft.v1';
+
   ManualTimetableController({
     List<ManualSession>? sessions,
     List<ManualFaculty>? faculty,
@@ -34,6 +40,7 @@ class ManualTimetableController extends ChangeNotifier {
   }
 
   static const String sampleDataLabel = 'DEMO SAMPLE · LOCAL DRAFT ONLY';
+  static const String conflictScenarioLabel = 'CONFLICT SCENARIO · LOCAL DEMO';
   static const List<String> dayNames = <String>[
     'Monday',
     'Tuesday',
@@ -62,6 +69,10 @@ class ManualTimetableController extends ChangeNotifier {
   int _selectedDay = 0;
   bool _showWeek = false;
   bool _hasUnsavedChanges = false;
+  bool _hasLocalValidation = false;
+  bool _isRestoring = false;
+  String _scenarioLabel = sampleDataLabel;
+  String _savedScenarioLabel = sampleDataLabel;
   int _nextSessionNumber = 100;
   int _nextSwapNumber = 1;
 
@@ -75,6 +86,9 @@ class ManualTimetableController extends ChangeNotifier {
   set showWeek(bool value) => setShowWeek(value);
 
   bool get hasUnsavedChanges => _hasUnsavedChanges;
+  bool get hasLocalValidation => _hasLocalValidation;
+  bool get isRestoring => _isRestoring;
+  String get dataLabel => _scenarioLabel;
 
   List<ManualSession> get sessions =>
       List<ManualSession>.unmodifiable(_sessions);
@@ -161,6 +175,58 @@ class ManualTimetableController extends ChangeNotifier {
     if (_showWeek == value) return;
     _showWeek = value;
     notifyListeners();
+  }
+
+  /// Restores the last locally saved draft. Malformed or outdated storage is
+  /// ignored so the clean demo remains available.
+  Future<void> restoreDraft() async {
+    _isRestoring = true;
+    notifyListeners();
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final raw = preferences.getString(_storageKey);
+      if (raw == null || raw.trim().isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final map = Map<String, dynamic>.from(decoded);
+      final sessions = _decodeSessions(map['sessions']);
+      final faculty = _decodeFaculty(map['faculty']);
+      final rooms = _decodeRooms(map['rooms']);
+      final swaps = _decodeSwaps(map['swaps']);
+      if (sessions == null ||
+          faculty == null ||
+          rooms == null ||
+          swaps == null) {
+        return;
+      }
+      _sessions = sessions;
+      _faculty = faculty;
+      _rooms = rooms;
+      _swapRequests = swaps;
+      _savedSessions = List<ManualSession>.from(_sessions);
+      _savedFaculty = List<ManualFaculty>.from(_faculty);
+      _savedRooms = List<ManualRoom>.from(_rooms);
+      _savedSwapRequests = List<ManualSwapRequest>.from(_swapRequests);
+      _selectedBatchId =
+          _batches.any((batch) => batch.id == map['selected_batch_id'])
+          ? map['selected_batch_id'] as String
+          : _selectedBatchId;
+      _selectedDay = (map['selected_day'] as int? ?? 0).clamp(
+        0,
+        dayNames.length - 1,
+      );
+      _showWeek = map['show_week'] as bool? ?? false;
+      _scenarioLabel = map['scenario_label'] as String? ?? sampleDataLabel;
+      _savedScenarioLabel = _scenarioLabel;
+      _hasUnsavedChanges = false;
+      _hasLocalValidation = false;
+      _refreshIssues();
+    } catch (_) {
+      // A broken local payload must never prevent the app from opening.
+    } finally {
+      _isRestoring = false;
+      notifyListeners();
+    }
   }
 
   /// Adds a class to the draft and immediately re-runs local validation.
@@ -283,15 +349,22 @@ class ManualTimetableController extends ChangeNotifier {
     return true;
   }
 
-  /// Marks the current draft as saved locally. No file, account or backend is
-  /// touched; this is only the editor's undo/discard checkpoint.
-  void saveDraft() {
+  /// Saves the current draft locally. No account, backend, or password is
+  /// involved; this is browser/device persistence for the demo only.
+  Future<void> saveDraft() async {
     _savedSessions = List<ManualSession>.from(_sessions);
     _savedFaculty = List<ManualFaculty>.from(_faculty);
     _savedRooms = List<ManualRoom>.from(_rooms);
     _savedSwapRequests = List<ManualSwapRequest>.from(_swapRequests);
+    _savedScenarioLabel = _scenarioLabel;
     _hasUnsavedChanges = false;
     notifyListeners();
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(_storageKey, jsonEncode(_draftMap()));
+    } catch (_) {
+      // The in-memory checkpoint remains usable when storage is unavailable.
+    }
   }
 
   void discardDraft() {
@@ -299,13 +372,15 @@ class ManualTimetableController extends ChangeNotifier {
     _faculty = List<ManualFaculty>.from(_savedFaculty);
     _rooms = List<ManualRoom>.from(_savedRooms);
     _swapRequests = List<ManualSwapRequest>.from(_savedSwapRequests);
+    _scenarioLabel = _savedScenarioLabel;
     _hasUnsavedChanges = false;
+    _hasLocalValidation = false;
     _refreshIssues();
     notifyListeners();
   }
 
   /// Restores the deterministic sample data and clears the local checkpoint.
-  void resetDemo() {
+  Future<void> resetDemo() async {
     _seedDemoData();
     _nextSessionNumber = 100;
     _nextSwapNumber = 1;
@@ -318,6 +393,32 @@ class ManualTimetableController extends ChangeNotifier {
     _swapRequests = <ManualSwapRequest>[];
     _savedSwapRequests = <ManualSwapRequest>[];
     _hasUnsavedChanges = false;
+    _hasLocalValidation = false;
+    _scenarioLabel = sampleDataLabel;
+    _savedScenarioLabel = sampleDataLabel;
+    _refreshIssues();
+    notifyListeners();
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove(_storageKey);
+    } catch (_) {
+      // The in-memory reset is still valid when storage is unavailable.
+    }
+  }
+
+  /// Loads a deliberately broken but coherent scenario for demonstrating the
+  /// Issues workflow. It is never presented as validated or publishable.
+  void loadConflictDemo() {
+    _seedDemoData();
+    _scenarioLabel = conflictScenarioLabel;
+    final base = _sessions.first;
+    _sessions.add(base.copyWith(id: 'demo-conflict-overlap'));
+    _sessions.add(base.copyWith(id: 'demo-conflict-missing-room', roomId: ''));
+    _selectedBatchId = _batches.first.id;
+    _selectedDay = 0;
+    _showWeek = false;
+    _hasUnsavedChanges = true;
+    _hasLocalValidation = false;
     _refreshIssues();
     notifyListeners();
   }
@@ -382,6 +483,7 @@ class ManualTimetableController extends ChangeNotifier {
   /// contains only hard conflicts; both public lists are updated together.
   List<ManualIssue> validate() {
     _refreshIssues();
+    _hasLocalValidation = true;
     notifyListeners();
     return hardConflicts;
   }
@@ -552,9 +654,197 @@ class ManualTimetableController extends ChangeNotifier {
 
   void _touchDraft() {
     _hasUnsavedChanges = true;
+    _hasLocalValidation = false;
     _refreshIssues();
     notifyListeners();
   }
+
+  Map<String, dynamic> _draftMap() => <String, dynamic>{
+    'version': 1,
+    'scenario_label': _scenarioLabel,
+    'selected_batch_id': _selectedBatchId,
+    'selected_day': _selectedDay,
+    'show_week': _showWeek,
+    'sessions': _sessions.map(_sessionMap).toList(),
+    'faculty': _faculty.map(_facultyMap).toList(),
+    'rooms': _rooms.map(_roomMap).toList(),
+    'swaps': _swapRequests.map(_swapMap).toList(),
+  };
+
+  static Map<String, dynamic> _sessionMap(ManualSession session) =>
+      <String, dynamic>{
+        'id': session.id,
+        'subject_id': session.subjectId,
+        'faculty_id': session.facultyId,
+        'batch_id': session.batchId,
+        'room_id': session.roomId,
+        'day': session.day,
+        'start': session.startMinute,
+        'end': session.endMinute,
+        'type': session.type.name,
+        'note': session.note,
+      };
+
+  static Map<String, dynamic> _facultyMap(ManualFaculty faculty) =>
+      <String, dynamic>{
+        'id': faculty.id,
+        'name': faculty.name,
+        'department': faculty.department,
+        'max_weekly_hours': faculty.maxWeeklyHours,
+        'is_proxy': faculty.isProxy,
+        'absences': faculty.absences
+            .map(
+              (absence) => <String, dynamic>{
+                'day': absence.day,
+                'start': absence.startMinute,
+                'end': absence.endMinute,
+                'reason': absence.reason,
+              },
+            )
+            .toList(),
+      };
+
+  static Map<String, dynamic> _roomMap(ManualRoom room) => <String, dynamic>{
+    'id': room.id,
+    'name': room.name,
+    'kind': room.kind,
+    'capacity': room.capacity,
+    'department': room.department,
+    'borrowable': room.borrowable,
+    'is_available': room.isAvailable,
+    'closures': room.unavailableSlots
+        .map(
+          (closure) => <String, dynamic>{
+            'day': closure.day,
+            'start': closure.startMinute,
+            'end': closure.endMinute,
+            'reason': closure.reason,
+          },
+        )
+        .toList(),
+  };
+
+  static Map<String, dynamic> _swapMap(ManualSwapRequest request) =>
+      <String, dynamic>{
+        'id': request.id,
+        'session_id': request.sessionId,
+        'target_faculty_id': request.targetFacultyId,
+        'target_session_id': request.targetSessionId,
+        'note': request.note,
+        'status': request.status,
+      };
+
+  List<ManualSession>? _decodeSessions(Object? value) {
+    if (value is! List) return null;
+    try {
+      return value.map((raw) {
+        final item = _map(raw);
+        return ManualSession(
+          id: item['id'] as String,
+          subjectId: item['subject_id'] as String,
+          facultyId: item['faculty_id'] as String,
+          batchId: item['batch_id'] as String,
+          roomId: item['room_id'] as String? ?? '',
+          day: _int(item['day']),
+          startMinute: _int(item['start']),
+          endMinute: _int(item['end']),
+          type: ManualSessionType.fromString(
+            item['type'] as String? ?? 'lecture',
+          ),
+          note: item['note'] as String? ?? '',
+        );
+      }).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<ManualFaculty>? _decodeFaculty(Object? value) {
+    if (value is! List) return null;
+    try {
+      return value.map((raw) {
+        final item = _map(raw);
+        final absences = (item['absences'] as List? ?? const <Object?>[]).map((
+          rawAbsence,
+        ) {
+          final absence = _map(rawAbsence);
+          return ManualAbsence(
+            day: _int(absence['day']),
+            startMinute: _int(absence['start']),
+            endMinute: _int(absence['end']),
+            reason: absence['reason'] as String? ?? 'Unavailable',
+          );
+        }).toList();
+        return ManualFaculty(
+          id: item['id'] as String,
+          name: item['name'] as String,
+          department: item['department'] as String? ?? '',
+          maxWeeklyHours: _int(item['max_weekly_hours']),
+          isProxy: item['is_proxy'] as bool? ?? false,
+          absences: absences,
+        );
+      }).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<ManualRoom>? _decodeRooms(Object? value) {
+    if (value is! List) return null;
+    try {
+      return value.map((raw) {
+        final item = _map(raw);
+        final closures = (item['closures'] as List? ?? const <Object?>[]).map((
+          rawClosure,
+        ) {
+          final closure = _map(rawClosure);
+          return ManualRoomClosure(
+            day: _int(closure['day']),
+            startMinute: _int(closure['start']),
+            endMinute: _int(closure['end']),
+            reason: closure['reason'] as String? ?? 'Unavailable',
+          );
+        }).toList();
+        return ManualRoom(
+          id: item['id'] as String,
+          name: item['name'] as String,
+          kind: item['kind'] as String? ?? 'classroom',
+          capacity: _int(item['capacity']),
+          department: item['department'] as String? ?? '',
+          borrowable: item['borrowable'] as bool? ?? true,
+          isAvailable: item['is_available'] as bool? ?? true,
+          unavailableSlots: closures,
+        );
+      }).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<ManualSwapRequest>? _decodeSwaps(Object? value) {
+    if (value is! List) return null;
+    try {
+      return value.map((raw) {
+        final item = _map(raw);
+        return ManualSwapRequest(
+          id: item['id'] as String,
+          sessionId: item['session_id'] as String,
+          targetFacultyId: item['target_faculty_id'] as String?,
+          targetSessionId: item['target_session_id'] as String?,
+          note: item['note'] as String? ?? '',
+          status: item['status'] as String? ?? 'draft',
+        );
+      }).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Map<String, dynamic> _map(Object? value) =>
+      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+  static int _int(Object? value) =>
+      value is num ? value.toInt() : int.parse('$value');
 
   void _refreshIssues() {
     final hard = <ManualIssue>[];

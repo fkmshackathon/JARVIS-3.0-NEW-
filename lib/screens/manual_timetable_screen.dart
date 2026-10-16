@@ -193,7 +193,7 @@ class _ManualTimetableScreenState extends State<ManualTimetableScreen> {
 
   Future<void> _resetDemo() async {
     if (!controller.hasUnsavedChanges) {
-      controller.resetDemo();
+      await controller.resetDemo();
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -215,7 +215,7 @@ class _ManualTimetableScreenState extends State<ManualTimetableScreen> {
         ],
       ),
     );
-    if (confirmed == true) controller.resetDemo();
+    if (confirmed == true) await controller.resetDemo();
   }
 }
 
@@ -248,11 +248,26 @@ class _ManualHeader extends StatelessWidget {
             ),
           ),
           StatusChip(
-            label: controller.hasUnsavedChanges ? 'Draft' : 'Saved',
-            tone: controller.hasUnsavedChanges ? Tone.warn : Tone.good,
-            icon: controller.hasUnsavedChanges
-                ? Icons.edit_outlined
-                : Icons.check_circle_outline,
+            label: controller.isRestoring
+                ? 'Restoring'
+                : controller.hasLocalValidation
+                ? (controller.hardConflicts.isEmpty
+                      ? 'Locally checked'
+                      : 'Needs fixes')
+                : controller.hasUnsavedChanges
+                ? 'Draft'
+                : 'Not checked',
+            tone: controller.isRestoring || controller.hasUnsavedChanges
+                ? Tone.warn
+                : controller.hasLocalValidation &&
+                      controller.hardConflicts.isEmpty
+                ? Tone.good
+                : Tone.neutral,
+            icon:
+                controller.hasLocalValidation &&
+                    controller.hardConflicts.isEmpty
+                ? Icons.check_circle_outline
+                : Icons.edit_outlined,
           ),
         ],
       ),
@@ -277,7 +292,7 @@ class _ManualHeader extends StatelessWidget {
             const SizedBox(width: SynchroSpacing.sm),
             Expanded(
               child: Text(
-                ManualTimetableController.sampleDataLabel,
+                controller.dataLabel,
                 style: Theme.of(context).textTheme.labelSmall
                     ?.copyWith(color: SynchroColors.navyDeep),
               ),
@@ -428,7 +443,9 @@ class _DraftActions extends StatelessWidget {
     runSpacing: SynchroSpacing.sm,
     children: [
       FilledButton.icon(
-        onPressed: controller.hasUnsavedChanges ? controller.saveDraft : null,
+        onPressed: controller.hasUnsavedChanges
+            ? () => controller.saveDraft()
+            : null,
         icon: const Icon(Icons.save_outlined, size: 18),
         label: const Text('Save draft'),
       ),
@@ -438,6 +455,16 @@ class _DraftActions extends StatelessWidget {
             : null,
         icon: const Icon(Icons.undo_outlined, size: 18),
         label: const Text('Discard'),
+      ),
+      OutlinedButton.icon(
+        onPressed: controller.validate,
+        icon: const Icon(Icons.fact_check_outlined, size: 18),
+        label: const Text('Check draft'),
+      ),
+      OutlinedButton.icon(
+        onPressed: controller.loadConflictDemo,
+        icon: const Icon(Icons.warning_amber_outlined, size: 18),
+        label: const Text('Load conflict sample'),
       ),
       OutlinedButton.icon(
         onPressed: onReset,
