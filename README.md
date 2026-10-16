@@ -1,9 +1,11 @@
 # SYNCHRO / Project Chronos
 
-SYNCHRO is a mobile-first smart-campus timetable client backed by a FastAPI
-service. It keeps the scheduling solver, independent validator, and audit trail
-server-side; the Flutter client only presents real backend state and requests
-generation or revalidation.
+SYNCHRO is a mobile-first smart-campus timetable client with a local manual
+timetable workspace plus an optional FastAPI-backed solver. The manual editor
+is the primary frontend workflow: coordinators can place, edit, move, delete,
+save, discard, and validate sample classes without a running backend. When the
+API is available, the existing solver, independent validator, and audit trail
+remain available as a separate server-result view.
 
 ## Runtime pins
 
@@ -66,6 +68,22 @@ flutter run -d <device> --dart-define=SYNCHRO_API=http://<host-lan-ip>:8000
 
 The web target is rendered inside a centered phone-sized shell on wide screens
 and uses the available width on real phones.
+
+### Frontend-only demo mode
+
+The app can be demonstrated without a backend. If the API is offline, choose
+`Continue with demo mode` on the branded connection screen. The manual editor
+then uses deterministic sample data labelled `DEMO SAMPLE · LOCAL DRAFT ONLY`.
+The local draft supports:
+
+- manual class creation, editing, moving, deletion, save/discard, and reset;
+- day/week views with batch selection, free slots, and breaks;
+- local teacher, room, and batch conflict detection;
+- faculty workload, room availability, absences, proxy drafts, and swap drafts;
+- an Issues view that separates hard conflicts from soft warnings.
+
+This state is intentionally in-memory and is not institutional data. It never
+pretends to publish or synchronize a local draft with the backend.
 
 ## Test and quality checks
 
