@@ -243,6 +243,46 @@ class ManualTimetableController extends ChangeNotifier {
     return true;
   }
 
+  /// Adds a faculty record to the local draft. IDs are kept stable so existing
+  /// session assignments remain referentially safe.
+  bool addFaculty(ManualFaculty teacher) {
+    if (teacher.id.trim().isEmpty ||
+        _faculty.any((item) => item.id == teacher.id)) {
+      return false;
+    }
+    _faculty.add(teacher);
+    _touchDraft();
+    return true;
+  }
+
+  /// Replaces a faculty record in the local draft without touching sessions.
+  bool editFaculty(ManualFaculty teacher) {
+    final index = _faculty.indexWhere((item) => item.id == teacher.id);
+    if (index < 0) return false;
+    _faculty[index] = teacher;
+    _touchDraft();
+    return true;
+  }
+
+  /// Adds a room or laboratory to the local draft.
+  bool addRoom(ManualRoom room) {
+    if (room.id.trim().isEmpty || _rooms.any((item) => item.id == room.id)) {
+      return false;
+    }
+    _rooms.add(room);
+    _touchDraft();
+    return true;
+  }
+
+  /// Replaces a room or laboratory in the local draft without reassigning it.
+  bool editRoom(ManualRoom room) {
+    final index = _rooms.indexWhere((item) => item.id == room.id);
+    if (index < 0) return false;
+    _rooms[index] = room;
+    _touchDraft();
+    return true;
+  }
+
   /// Marks the current draft as saved locally. No file, account or backend is
   /// touched; this is only the editor's undo/discard checkpoint.
   void saveDraft() {

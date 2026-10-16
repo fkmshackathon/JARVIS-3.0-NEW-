@@ -93,6 +93,33 @@ void main() {
             .any((candidate) => candidate.id == room.id),
         isFalse,
       );
+
+      final addedFaculty = ManualFaculty(
+        id: 'faculty-demo-new',
+        name: 'Demo Faculty',
+        department: 'Information Technology',
+        maxWeeklyHours: 12,
+      );
+      expect(controller.addFaculty(addedFaculty), isTrue);
+      expect(
+        controller.editFaculty(addedFaculty.copyWith(name: 'Updated Faculty')),
+        isTrue,
+      );
+      expect(
+        controller.facultyById('faculty-demo-new')?.name,
+        'Updated Faculty',
+      );
+
+      final addedRoom = ManualRoom(
+        id: 'room-demo-new',
+        name: 'CR-Demo',
+        kind: 'classroom',
+        capacity: 45,
+        department: 'Information Technology',
+      );
+      expect(controller.addRoom(addedRoom), isTrue);
+      expect(controller.editRoom(addedRoom.copyWith(capacity: 50)), isTrue);
+      expect(controller.roomById('room-demo-new')?.capacity, 50);
     },
   );
 
