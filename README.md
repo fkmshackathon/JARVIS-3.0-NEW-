@@ -106,11 +106,13 @@ allowlist, and an externally reachable `SYNCHRO_API` before shipping.
 ## Product boundaries
 
 The current repository exposes campus loading, workload/preflight, timetable
-generation, server validation, and generation history. It does not yet expose
-authentication, role authorization, campus editing, alternative refinement, or
-publishing endpoints. SYNCHRO surfaces those boundaries honestly: account
-controls remain disabled until a real provider is connected, and refinement
-offers only the currently supported revalidation/history flow.
+generation, server validation, and generation history. It does not expose a
+real authentication, role authorization, campus editing, alternative
+refinement, or publishing endpoint. The Chrome demo therefore includes a
+clearly labelled **local-only demo account**: sign-in and sign-up validate the
+form and keep a profile in memory for the running session, but never store or
+send passwords and never authorize backend requests. Refinement offers only the
+currently supported revalidation/history flow.
 
 The scheduling implementation is deliberately protected in:
 

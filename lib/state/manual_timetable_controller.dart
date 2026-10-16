@@ -1106,5 +1106,12 @@ class ManualTimetableController extends ChangeNotifier {
         endMinute: 800,
       ),
     ];
+
+    // The seed literals above are const for readability, but all collections
+    // become mutable draft state once the editor opens.
+    _faculty = List<ManualFaculty>.from(_faculty);
+    _rooms = List<ManualRoom>.from(_rooms);
+    _batches = List<ManualBatch>.from(_batches);
+    _subjects = List<ManualSubject>.from(_subjects);
   }
 }
