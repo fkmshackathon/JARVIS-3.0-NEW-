@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
@@ -48,27 +46,32 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 760;
+        final compact = constraints.maxWidth < 390;
+        final gutter = compact ? SynchroSpacing.lg : SynchroSpacing.gutter;
+
         return ListView(
-          padding: const EdgeInsets.fromLTRB(
-            SynchroSpacing.gutter,
+          padding: EdgeInsets.fromLTRB(
+            gutter,
             SynchroSpacing.lg,
-            SynchroSpacing.gutter,
+            gutter,
             SynchroSpacing.xxl,
           ),
           children: [
             if (result == null || running)
               _ControlCard(controller: controller, running: running),
-            const SizedBox(height: SynchroSpacing.lg),
-            if (controller.runError != null)
+            if (controller.runError != null) ...[
+              if (result == null || running)
+                const SizedBox(height: SynchroSpacing.md),
               Notice(
                 tone: Tone.bad,
                 icon: Icons.error_outline,
                 text: controller.runError!,
               ),
+            ],
             if (result != null) ...[
+              if (running) const SizedBox(height: SynchroSpacing.md),
               _ResultStrip(result: result),
-              const SizedBox(height: SynchroSpacing.lg),
+              const SizedBox(height: SynchroSpacing.md),
             ],
             if (result != null && result.assignments.isNotEmpty) ...[
               _ScheduleToolbar(
@@ -83,11 +86,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
               ),
               const SizedBox(height: SynchroSpacing.md),
               if (_showWeek)
-                _WeekGrid(
-                  controller: controller,
-                  campus: campus,
-                  isWide: isWide,
-                )
+                _WeekView(controller: controller, campus: campus)
               else
                 _DayView(
                   controller: controller,
@@ -137,27 +136,32 @@ class _ControlCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final blocker = controller.summary?.blocker ?? controller.previewBlocker;
     final enabled = !running && blocker == null;
+    final result = controller.result;
 
     return SectionCard(
       overline: 'Solver controls',
       title: 'Generate timetable',
-      trailing: running
-          ? const StatusChip(
-              label: 'running',
-              tone: Tone.warn,
-              icon: Icons.autorenew,
-            )
-          : controller.result == null
-          ? const StatusChip(label: 'not run', icon: Icons.schedule)
-          : StatusChip(
-              label: controller.result!.solved
-                  ? controller.result!.solverStatus.toLowerCase()
-                  : 'no solution',
-              tone: controller.result!.solved ? Tone.good : Tone.bad,
-            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: running
+                ? const StatusChip(
+                    label: 'running',
+                    tone: Tone.warn,
+                    icon: Icons.autorenew,
+                  )
+                : result == null
+                ? const StatusChip(label: 'not run', icon: Icons.schedule)
+                : StatusChip(
+                    label: result.solved
+                        ? result.solverStatus.toLowerCase()
+                        : 'no solution',
+                    tone: result.solved ? Tone.good : Tone.bad,
+                  ),
+          ),
+          const SizedBox(height: SynchroSpacing.lg),
           if (blocker != null)
             Notice(tone: Tone.bad, icon: Icons.block_outlined, text: blocker)
           else ...[
@@ -283,19 +287,38 @@ class _ResultStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final violations = result.violations.length;
+    final theme = Theme.of(context);
+
     return SectionCard(
       overline: 'Run #${result.runId}',
       title: result.solved ? 'Timetable produced' : 'No timetable',
-      trailing: StatusChip(
-        label: result.publishable ? 'validator clean' : 'validator blocked',
-        tone: result.publishable ? Tone.good : Tone.bad,
-        icon: result.publishable
-            ? Icons.verified_outlined
-            : Icons.gpp_bad_outlined,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  result.publishable
+                      ? 'The server validator found no hard conflicts.'
+                      : 'Review the validator findings before publishing.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              const SizedBox(width: SynchroSpacing.sm),
+              StatusChip(
+                label: result.publishable
+                    ? 'validator clean'
+                    : 'validator blocked',
+                tone: result.publishable ? Tone.good : Tone.bad,
+                icon: result.publishable
+                    ? Icons.verified_outlined
+                    : Icons.gpp_bad_outlined,
+              ),
+            ],
+          ),
+          const SizedBox(height: SynchroSpacing.md),
           StatusChip(
             label: result.publishable ? 'PUBLISHABLE' : 'NOT PUBLISHABLE',
             tone: result.publishable ? Tone.good : Tone.bad,
@@ -326,7 +349,7 @@ class _ResultStrip extends StatelessWidget {
             Text(
               '${result.utilisation!.roomsInUse}/${result.utilisation!.roomsOnCampus} rooms used'
               ' · ${result.utilisation!.borrowedPeriods} borrowed periods',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: theme.textTheme.bodySmall,
             ),
           ],
           if (!result.solved && result.message.isNotEmpty) ...[
@@ -367,59 +390,52 @@ class _ScheduleToolbar extends StatelessWidget {
     return SectionCard(
       overline: 'Schedule focus',
       title: showWeek ? 'Weekly overview' : dayName(selectedDay),
-      trailing: StatusChip(
-        label: campus.batchName(controller.batchId ?? ''),
-        icon: Icons.groups_outlined,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _BatchPicker(controller: controller, campus: campus),
-          const SizedBox(height: SynchroSpacing.lg),
-          Row(
-            children: [
-              Text('View', style: Theme.of(context).textTheme.labelSmall),
-              const Spacer(),
-              ChoiceChip(
-                label: const Text('Day'),
-                selected: !showWeek,
-                onSelected: (_) => onViewChanged(false),
-                avatar: const Icon(Icons.view_agenda_outlined, size: 16),
-              ),
-              const SizedBox(width: SynchroSpacing.sm),
-              ChoiceChip(
-                label: const Text('Week'),
-                selected: showWeek,
-                onSelected: (_) => onViewChanged(true),
-                avatar: const Icon(Icons.grid_view_outlined, size: 16),
-              ),
-            ],
+          const SizedBox(height: SynchroSpacing.md),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final stacked = constraints.maxWidth < 470;
+              final view = _ViewSwitcher(
+                showWeek: showWeek,
+                onViewChanged: onViewChanged,
+              );
+
+              if (stacked) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('View', style: Theme.of(context).textTheme.labelSmall),
+                    const SizedBox(height: SynchroSpacing.sm),
+                    view,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Text('View', style: Theme.of(context).textTheme.labelSmall),
+                  const Spacer(),
+                  view,
+                ],
+              );
+            },
           ),
           if (!showWeek) ...[
-            const SizedBox(height: SynchroSpacing.md),
+            const SizedBox(height: SynchroSpacing.lg),
             Text('Day', style: Theme.of(context).textTheme.labelSmall),
             const SizedBox(height: SynchroSpacing.sm),
-            SizedBox(
-              height: 40,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: days.length,
-                separatorBuilder: (_, _) =>
-                    const SizedBox(width: SynchroSpacing.sm),
-                itemBuilder: (context, index) {
-                  final day = days[index];
-                  return ChoiceChip(
-                    label: Text(dayName(day)),
-                    selected: selectedDay == day,
-                    onSelected: (_) => onDaySelected(day),
-                  );
-                },
-              ),
+            _DaySelector(
+              days: days,
+              selectedDay: selectedDay,
+              onSelected: onDaySelected,
             ),
           ] else ...[
             const SizedBox(height: SynchroSpacing.md),
             Text(
-              'Select Day for the readable timeline. Week keeps every period visible together.',
+              'A stacked week view keeps every day readable on a phone. Select Day for the focused timeline.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -427,6 +443,34 @@ class _ScheduleToolbar extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ViewSwitcher extends StatelessWidget {
+  const _ViewSwitcher({required this.showWeek, required this.onViewChanged});
+
+  final bool showWeek;
+  final ValueChanged<bool> onViewChanged;
+
+  @override
+  Widget build(BuildContext context) => SegmentedButton<bool>(
+    segments: const [
+      ButtonSegment<bool>(
+        value: false,
+        label: Text('Day'),
+        icon: Icon(Icons.view_agenda_outlined),
+      ),
+      ButtonSegment<bool>(
+        value: true,
+        label: Text('Week'),
+        icon: Icon(Icons.view_list_outlined),
+      ),
+    ],
+    selected: {showWeek},
+    showSelectedIcon: false,
+    onSelectionChanged: (selection) {
+      if (selection.isNotEmpty) onViewChanged(selection.first);
+    },
+  );
 }
 
 class _BatchPicker extends StatelessWidget {
@@ -438,30 +482,135 @@ class _BatchPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final batches = campus.batches;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Batch', style: Theme.of(context).textTheme.labelSmall),
-        const SizedBox(height: SynchroSpacing.sm),
-        SizedBox(
-          height: 40,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: batches.length,
-            separatorBuilder: (_, _) =>
-                const SizedBox(width: SynchroSpacing.sm),
-            itemBuilder: (context, i) {
-              final batch = batches[i];
-              final selected = batch.id == controller.batchId;
-              return ChoiceChip(
-                selected: selected,
-                onSelected: (_) => controller.selectBatch(batch.id),
-                label: Text(batch.name.replaceFirst('SEIT-', '')),
-              );
-            },
+    if (batches.isEmpty) {
+      return Text(
+        'No batches are available in the campus definition.',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+
+    final selected = batches.any((batch) => batch.id == controller.batchId)
+        ? controller.batchId
+        : batches.first.id;
+
+    return DropdownButtonFormField<String>(
+      initialValue: selected,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Batch',
+        prefixIcon: Icon(Icons.groups_outlined),
+      ),
+      items: [
+        for (final batch in batches)
+          DropdownMenuItem<String>(
+            value: batch.id,
+            child: Text(
+              batch.name.replaceFirst('SEIT-', ''),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: (id) {
+        if (id != null) controller.selectBatch(id);
+      },
+    );
+  }
+}
+
+class _DaySelector extends StatelessWidget {
+  const _DaySelector({
+    required this.days,
+    required this.selectedDay,
+    required this.onSelected,
+  });
+
+  final List<int> days;
+  final int selectedDay;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: SynchroSpacing.sm,
+    runSpacing: SynchroSpacing.sm,
+    children: [
+      for (final day in days)
+        _DayPill(
+          day: day,
+          selected: selectedDay == day,
+          onTap: () => onSelected(day),
+        ),
+    ],
+  );
+}
+
+class _DayPill extends StatelessWidget {
+  const _DayPill({
+    required this.day,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final int day;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final foreground = selected
+        ? theme.colorScheme.onPrimary
+        : theme.colorScheme.onSurface;
+    final background = selected
+        ? theme.colorScheme.primary
+        : theme.colorScheme.surfaceContainerLow;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${dayName(day)}, day ${day + 1}',
+      child: Material(
+        color: background,
+        borderRadius: BorderRadius.circular(SynchroRadius.chip),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(SynchroRadius.chip),
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 56, minHeight: 48),
+            padding: const EdgeInsets.symmetric(
+              horizontal: SynchroSpacing.md,
+              vertical: SynchroSpacing.sm,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(SynchroRadius.chip),
+              border: Border.all(
+                color: selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outlineVariant,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _shortDay(day),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: foreground,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${day + 1}'.padLeft(2, '0'),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: foreground,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -479,11 +628,91 @@ class _DayView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final assignments =
-        controller.visibleAssignments
-            .where((a) => a.day == selectedDay)
-            .toList()
-          ..sort((a, b) => a.index.compareTo(b.index));
+    final assignments = _assignmentsForDay(controller, selectedDay);
+
+    return SectionCard(
+      overline: 'Readable day view',
+      title: dayName(selectedDay),
+      trailing: Text(
+        '${assignments.length} ${assignments.length == 1 ? 'session' : 'sessions'}',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      child: _TimelineRows(
+        controller: controller,
+        campus: campus,
+        day: selectedDay,
+      ),
+    );
+  }
+}
+
+class _WeekView extends StatelessWidget {
+  const _WeekView({required this.controller, required this.campus});
+
+  final SchedulingController controller;
+  final Campus campus;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = campus.dayNumbers;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < days.length; index++) ...[
+          if (index > 0) const SizedBox(height: SynchroSpacing.md),
+          _WeekDayCard(
+            controller: controller,
+            campus: campus,
+            day: days[index],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _WeekDayCard extends StatelessWidget {
+  const _WeekDayCard({
+    required this.controller,
+    required this.campus,
+    required this.day,
+  });
+
+  final SchedulingController controller;
+  final Campus campus;
+  final int day;
+
+  @override
+  Widget build(BuildContext context) {
+    final assignments = _assignmentsForDay(controller, day);
+
+    return SectionCard(
+      overline: 'Weekly grid · day ${day + 1}',
+      title: dayName(day),
+      trailing: Text(
+        '${assignments.length} ${assignments.length == 1 ? 'session' : 'sessions'}',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      child: _TimelineRows(controller: controller, campus: campus, day: day),
+    );
+  }
+}
+
+class _TimelineRows extends StatelessWidget {
+  const _TimelineRows({
+    required this.controller,
+    required this.campus,
+    required this.day,
+  });
+
+  final SchedulingController controller;
+  final Campus campus;
+  final int day;
+
+  @override
+  Widget build(BuildContext context) {
+    final assignments = _assignmentsForDay(controller, day);
     final starts = <String, Assignment>{
       for (final assignment in assignments)
         '${assignment.day}:${assignment.index}': assignment,
@@ -496,35 +725,29 @@ class _DayView extends StatelessWidget {
       }
     }
 
-    final slots = campus.slots.where((slot) => slot.day == selectedDay).toList()
+    final slots = campus.slots.where((slot) => slot.day == day).toList()
       ..sort((a, b) => a.index.compareTo(b.index));
 
-    return SectionCard(
-      overline: 'Readable day view',
-      title: dayName(selectedDay),
-      trailing: Text(
-        '${assignments.length} ${assignments.length == 1 ? 'session' : 'sessions'}',
+    if (slots.isEmpty) {
+      return Text(
+        'No campus periods are defined for this day.',
         style: Theme.of(context).textTheme.bodySmall,
-      ),
-      child: slots.isEmpty
-          ? Text(
-              'No campus periods are defined for this day.',
-              style: Theme.of(context).textTheme.bodySmall,
-            )
-          : Column(
-              children: [
-                for (final slot in slots)
-                  if (campus.isBreak(slot.day, slot.index) ||
-                      !covered.contains('${slot.day}:${slot.index}'))
-                    _DaySlot(
-                      slot: slot,
-                      assignment: starts['${slot.day}:${slot.index}'],
-                      isBreak: campus.isBreak(slot.day, slot.index),
-                      campus: campus,
-                      controller: controller,
-                    ),
-              ],
+      );
+    }
+
+    return Column(
+      children: [
+        for (final slot in slots)
+          if (campus.isBreak(slot.day, slot.index) ||
+              !covered.contains('${slot.day}:${slot.index}'))
+            _DaySlot(
+              slot: slot,
+              assignment: starts['${slot.day}:${slot.index}'],
+              isBreak: campus.isBreak(slot.day, slot.index),
+              campus: campus,
+              controller: controller,
             ),
+      ],
     );
   }
 }
@@ -552,25 +775,13 @@ class _DaySlot extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 68,
+            width: 58,
             child: Padding(
               padding: const EdgeInsets.only(top: SynchroSpacing.sm),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'P${slot.index + 1}',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    formatMinutes(slot.start),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
-              ),
+              child: _TimeRail(slot: slot),
             ),
           ),
+          const SizedBox(width: SynchroSpacing.sm),
           Expanded(
             child: assignment != null
                 ? _SessionCard(
@@ -579,7 +790,7 @@ class _DaySlot extends StatelessWidget {
                     controller: controller,
                   )
                 : isBreak
-                ? const _BreakRow()
+                ? _BreakRow(slot: slot)
                 : _OpenSlot(slot: slot),
           ),
         ],
@@ -588,71 +799,121 @@ class _DaySlot extends StatelessWidget {
   }
 }
 
+class _TimeRail extends StatelessWidget {
+  const _TimeRail({required this.slot});
+
+  final Slot slot;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text('P${slot.index + 1}', style: Theme.of(context).textTheme.titleSmall),
+      const SizedBox(height: 2),
+      Text(
+        formatMinutes(slot.start),
+        style: Theme.of(context).textTheme.labelSmall,
+      ),
+      Text(
+        formatMinutes(slot.end),
+        style: Theme.of(context).textTheme.labelSmall
+            ?.copyWith(fontWeight: FontWeight.w400),
+      ),
+    ],
+  );
+}
+
 class _OpenSlot extends StatelessWidget {
   const _OpenSlot({required this.slot});
 
   final Slot slot;
 
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 66),
-    padding: const EdgeInsets.all(SynchroSpacing.md),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(SynchroRadius.chip),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-    ),
-    child: Row(
-      children: [
-        Icon(
-          Icons.more_time_outlined,
-          size: 18,
-          color: Theme.of(context).colorScheme.outline,
-        ),
-        const SizedBox(width: SynchroSpacing.sm),
-        Text(
-          '${formatMinutes(slot.start)}–${formatMinutes(slot.end)} · Available',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minHeight: 74),
+      padding: const EdgeInsets.all(SynchroSpacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(SynchroRadius.chip),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.more_time_outlined,
+            size: 20,
+            color: theme.colorScheme.outline,
+          ),
+          const SizedBox(width: SynchroSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('FREE', style: theme.textTheme.labelMedium),
+                const SizedBox(height: 2),
+                Text(
+                  '${formatMinutes(slot.start)}–${formatMinutes(slot.end)} · Available',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _BreakRow extends StatelessWidget {
-  const _BreakRow();
+  const _BreakRow({required this.slot});
+
+  final Slot slot;
 
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 66),
-    padding: const EdgeInsets.symmetric(horizontal: SynchroSpacing.md),
-    decoration: BoxDecoration(
-      color: SynchroColors.cream,
-      borderRadius: BorderRadius.circular(SynchroRadius.chip),
-      border: Border.all(color: SynchroColors.warn.withValues(alpha: 0.28)),
-    ),
-    child: Row(
-      children: [
-        const Icon(
-          Icons.free_breakfast_outlined,
-          size: 18,
-          color: SynchroColors.warn,
-        ),
-        const SizedBox(width: SynchroSpacing.sm),
-        Text(
-          'BREAK',
-          style: Theme.of(context).textTheme.labelMedium
-              ?.copyWith(color: SynchroColors.warn, letterSpacing: 1.2),
-        ),
-        const Spacer(),
-        Text(
-          'No session',
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: SynchroColors.warn),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ink = StatusChip.color(Tone.warn, theme.brightness);
+    final background = theme.brightness == Brightness.dark
+        ? ink.withValues(alpha: 0.12)
+        : SynchroColors.cream;
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 74),
+      padding: const EdgeInsets.all(SynchroSpacing.md),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(SynchroRadius.chip),
+        border: Border.all(color: ink.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.free_breakfast_outlined, size: 20, color: ink),
+          const SizedBox(width: SynchroSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'BREAK',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: ink,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${formatMinutes(slot.start)}–${formatMinutes(slot.end)} · No session',
+                  style: theme.textTheme.bodySmall?.copyWith(color: ink),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SessionCard extends StatelessWidget {
@@ -675,75 +936,129 @@ class _SessionCard extends StatelessWidget {
     final subject = campus.subjectName(assignment.subjectId);
     final label =
         '$subject, ${formatMinutes(assignment.start)} to ${formatMinutes(assignment.end)}, $room';
+    final accent = lab
+        ? (theme.brightness == Brightness.dark
+              ? SynchroColors.warnOnNavy
+              : SynchroColors.orangeDeep)
+        : theme.colorScheme.primary;
 
     return Semantics(
       button: true,
-      label: label,
+      label: '$label · ${lab ? 'lab' : 'lecture'}',
       child: Material(
-        color: theme.colorScheme.surfaceContainerLow,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(SynchroRadius.chip),
         child: InkWell(
           borderRadius: BorderRadius.circular(SynchroRadius.chip),
           onTap: () => _openDetails(context, assignment, campus, controller),
           child: Container(
-            constraints: const BoxConstraints(minHeight: 78),
-            padding: const EdgeInsets.all(SynchroSpacing.md),
+            constraints: const BoxConstraints(minHeight: 104),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(SynchroRadius.chip),
               border: Border.all(color: theme.colorScheme.outlineVariant),
-              boxShadow: [
-                BoxShadow(
-                  color: SynchroColors.navy.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        subject,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 4,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: const BorderRadius.horizontal(
+                        left: Radius.circular(SynchroRadius.chip),
                       ),
                     ),
-                    const SizedBox(width: SynchroSpacing.sm),
-                    Icon(
-                      lab ? Icons.science_outlined : Icons.menu_book_outlined,
-                      size: 18,
-                      color: lab
-                          ? SynchroColors.orangeDeep
-                          : theme.colorScheme.primary,
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(SynchroSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  subject,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleSmall,
+                                ),
+                              ),
+                              const SizedBox(width: SynchroSpacing.sm),
+                              _TypeBadge(
+                                label: lab ? 'LAB' : 'LECTURE',
+                                color: accent,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: SynchroSpacing.sm),
+                          _Meta(
+                            icon: Icons.schedule_outlined,
+                            text:
+                                '${formatMinutes(assignment.start)}–${formatMinutes(assignment.end)}',
+                          ),
+                          const SizedBox(height: SynchroSpacing.xs),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _Meta(
+                                  icon: Icons.meeting_room_outlined,
+                                  text: room,
+                                ),
+                              ),
+                              const SizedBox(width: SynchroSpacing.md),
+                              Expanded(
+                                child: _Meta(
+                                  icon: Icons.person_outline,
+                                  text: faculty,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: SynchroSpacing.sm),
-                Wrap(
-                  spacing: SynchroSpacing.md,
-                  runSpacing: SynchroSpacing.xs,
-                  children: [
-                    _Meta(
-                      icon: Icons.schedule_outlined,
-                      text:
-                          '${formatMinutes(assignment.start)}–${formatMinutes(assignment.end)}',
-                    ),
-                    _Meta(icon: Icons.meeting_room_outlined, text: room),
-                    _Meta(icon: Icons.person_outline, text: faculty),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+class _TypeBadge extends StatelessWidget {
+  const _TypeBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: SynchroSpacing.sm,
+      vertical: SynchroSpacing.xs,
+    ),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(SynchroRadius.pill),
+      border: Border.all(color: color.withValues(alpha: 0.30)),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        color: color,
+        fontSize: SynchroType.micro,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+      ),
+    ),
+  );
 }
 
 class _Meta extends StatelessWidget {
@@ -754,283 +1069,38 @@ class _Meta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
     children: [
       Icon(
         icon,
         size: 14,
         color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
-      const SizedBox(width: 4),
-      Text(text, style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(width: SynchroSpacing.xs),
+      Expanded(
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
     ],
   );
 }
+
+List<Assignment> _assignmentsForDay(SchedulingController controller, int day) =>
+    controller.visibleAssignments.where((a) => a.day == day).toList()
+      ..sort((a, b) => a.index.compareTo(b.index));
 
 int _spanFor(Assignment assignment, Campus campus) => assignment.isLab
     ? (campus.subjectsById[assignment.subjectId]?.labDurationSlots ?? 1)
     : 1;
 
-class _Cell {
-  const _Cell({required this.assignment, required this.offset});
-
-  final Assignment assignment;
-  final int offset;
-
-  bool get isStart => offset == 0;
-}
-
-class _WeekGrid extends StatelessWidget {
-  const _WeekGrid({
-    required this.controller,
-    required this.campus,
-    required this.isWide,
-  });
-
-  final SchedulingController controller;
-  final Campus campus;
-  final bool isWide;
-
-  @override
-  Widget build(BuildContext context) {
-    final assignments = controller.visibleAssignments;
-    final cells = <String, _Cell>{};
-    for (final assignment in assignments) {
-      final spans = _spanFor(assignment, campus);
-      for (var offset = 0; offset < spans; offset++) {
-        cells['${assignment.day}:${assignment.index + offset}'] = _Cell(
-          assignment: assignment,
-          offset: offset,
-        );
-      }
-    }
-
-    final days = campus.dayNumbers;
-    final periods = campus.periodIndexes;
-    final minWidth = math.max<double>(
-      520.0,
-      (56 + days.length * (isWide ? 112 : 124)).toDouble(),
-    );
-
-    return SectionCard(
-      padding: const EdgeInsets.all(SynchroSpacing.md),
-      overline: campus.batchName(controller.batchId ?? ''),
-      title: 'Weekly grid',
-      trailing: Text(
-        '${assignments.length} sessions',
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: minWidth,
-          child: Column(
-            children: [
-              _GridRow(
-                height: 34,
-                days: days,
-                builder: (context, day) => day == null
-                    ? const Padding(
-                        padding: EdgeInsets.only(left: 4),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'PERIOD',
-                            style: TextStyle(fontSize: 9, letterSpacing: 1),
-                          ),
-                        ),
-                      )
-                    : Center(
-                        child: Text(
-                          dayName(day)
-                              .substring(0, math.min(3, dayName(day).length))
-                              .toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ),
-              ),
-              for (final index in periods)
-                _GridRow(
-                  height: 62,
-                  days: days,
-                  builder: (context, day) {
-                    if (day == null) {
-                      return Padding(
-                        padding: const EdgeInsets.only(left: 4),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'P${index + 1}',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            Text(
-                              campus.periodStart.containsKey(index)
-                                  ? formatMinutes(campus.periodStart[index]!)
-                                  : '',
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(fontSize: 9),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    if (campus.isBreak(day, index)) return const _BreakCell();
-                    final cell = cells['$day:$index'];
-                    if (cell == null) return const _EmptyCell();
-                    return _SessionCell(
-                      cell: cell,
-                      campus: campus,
-                      onTap: () => _openDetails(
-                        context,
-                        cell.assignment,
-                        campus,
-                        controller,
-                      ),
-                    );
-                  },
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GridRow extends StatelessWidget {
-  const _GridRow({
-    required this.height,
-    required this.days,
-    required this.builder,
-  });
-
-  final double height;
-  final List<int> days;
-  final Widget Function(BuildContext context, int? day) builder;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    height: height,
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(width: 52, child: builder(context, null)),
-        for (final day in days) Expanded(child: builder(context, day)),
-      ],
-    ),
-  );
-}
-
-class _BreakCell extends StatelessWidget {
-  const _BreakCell();
-
-  @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.all(2),
-    decoration: BoxDecoration(
-      color: SynchroColors.cream,
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: const Center(
-      child: Text(
-        'BREAK',
-        style: TextStyle(
-          fontSize: 9,
-          letterSpacing: 1.2,
-          color: SynchroColors.warn,
-        ),
-      ),
-    ),
-  );
-}
-
-class _EmptyCell extends StatelessWidget {
-  const _EmptyCell();
-
-  @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.all(2),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-    ),
-  );
-}
-
-class _SessionCell extends StatelessWidget {
-  const _SessionCell({
-    required this.cell,
-    required this.campus,
-    required this.onTap,
-  });
-
-  final _Cell cell;
-  final Campus campus;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final assignment = cell.assignment;
-    final lab = assignment.isLab || assignment.roomKind == 'laboratory';
-    final background = cell.isStart
-        ? (lab ? SynchroColors.navySoft : SynchroColors.navy)
-        : SynchroColors.navy.withValues(alpha: 0.35);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.all(2),
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (cell.isStart) ...[
-              Text(
-                campus.subjectName(assignment.subjectId),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  height: 1.15,
-                  color: SynchroColors.onNavy,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                campus.roomName(assignment.roomId),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: lab ? SynchroColors.orange : SynchroColors.onNavyMuted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ] else
-              const Padding(
-                padding: EdgeInsets.only(left: 2),
-                child: Text(
-                  '· · ·',
-                  style: TextStyle(fontSize: 9, color: SynchroColors.navySoft),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+String _shortDay(int day) {
+  final name = dayName(day);
+  return name.length <= 3
+      ? name.toUpperCase()
+      : name.substring(0, 3).toUpperCase();
 }
 
 void _openDetails(
@@ -1059,6 +1129,7 @@ void _openDetails(
       final capacity = room != null && batch != null
           ? '${room.capacity} seats for ${batch.size} students'
           : 'Not available from campus data';
+      final lab = assignment.isLab || assignment.roomKind == 'laboratory';
 
       return SafeArea(
         child: SingleChildScrollView(
@@ -1099,7 +1170,7 @@ void _openDetails(
               ),
               _Detail(
                 'Room',
-                '${campus.roomName(assignment.roomId)} · ${assignment.isLab ? 'laboratory' : 'classroom'}',
+                '${campus.roomName(assignment.roomId)} · ${lab ? 'laboratory' : 'classroom'}',
               ),
               _Detail('Faculty', campus.facultyName(assignment.facultyId)),
               _Detail('Batch', campus.batchName(assignment.batchId)),
@@ -1181,29 +1252,52 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget swatch(Color color, String label) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
+    Widget swatch(Color color, String label, {IconData? icon}) => Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: SynchroSpacing.sm,
+        vertical: SynchroSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(SynchroRadius.pill),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null)
+            Icon(icon, size: 14, color: color)
+          else
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          const SizedBox(width: 6),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
     );
 
+    final theme = Theme.of(context);
+    final lecture = theme.colorScheme.primary;
+    final lab = theme.brightness == Brightness.dark
+        ? SynchroColors.warnOnNavy
+        : SynchroColors.orangeDeep;
+    final breakColor = StatusChip.color(Tone.warn, theme.brightness);
+    final free = theme.colorScheme.outline;
+
     return Wrap(
-      spacing: SynchroSpacing.lg,
+      spacing: SynchroSpacing.sm,
       runSpacing: SynchroSpacing.sm,
       children: [
-        swatch(SynchroColors.navy, 'Lecture'),
-        swatch(SynchroColors.navySoft, 'Lab'),
-        swatch(SynchroColors.cream, 'Break'),
+        swatch(lecture, 'Lecture'),
+        swatch(lab, 'Lab'),
+        swatch(breakColor, 'Break', icon: Icons.free_breakfast_outlined),
+        swatch(free, 'Free', icon: Icons.more_time_outlined),
       ],
     );
   }
