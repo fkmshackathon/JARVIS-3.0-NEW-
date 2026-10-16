@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../brand/synchro_mark.dart';
 import '../data/models.dart';
+import '../state/demo_auth.dart';
 import '../state/scheduling_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
@@ -16,6 +17,11 @@ class HomeScreen extends StatelessWidget {
     this.onRefineTimetable,
     this.onOpenAccount,
     this.onOpenAudit,
+    this.onOpenWorkload,
+    this.onOpenRooms,
+    this.onOpenChanges,
+    this.onOpenIssues,
+    this.auth,
   });
 
   final SchedulingController controller;
@@ -23,53 +29,69 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback? onRefineTimetable;
   final VoidCallback? onOpenAccount;
   final VoidCallback? onOpenAudit;
+  final VoidCallback? onOpenWorkload;
+  final VoidCallback? onOpenRooms;
+  final VoidCallback? onOpenChanges;
+  final VoidCallback? onOpenIssues;
+  final DemoAuth? auth;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: ListenableBuilder(
         listenable: controller,
-        builder: (context, _) => SafeArea(
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(
-                  SynchroSpacing.gutter,
-                  SynchroSpacing.lg,
-                  SynchroSpacing.gutter,
-                  SynchroSpacing.xxl,
-                ),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    _Header(
-                      controller: controller,
-                      onOpenAccount: onOpenAccount,
-                    ),
-                    const SizedBox(height: SynchroSpacing.xl),
-                    _ShortcutRow(
-                      onOpenAccount: onOpenAccount,
-                      onOpenAudit: onOpenAudit,
-                    ),
-                    const SizedBox(height: SynchroSpacing.xl),
-                    _StatusCard(controller: controller),
-                    const SizedBox(height: SynchroSpacing.xl),
-                    _PrimaryActions(
-                      onCreateTimetable: onCreateTimetable,
-                      onRefineTimetable: onRefineTimetable,
-                    ),
-                    const SizedBox(height: SynchroSpacing.xl),
-                    _SchedulePreview(controller: controller),
-                    const SizedBox(height: SynchroSpacing.lg),
-                    _CampusSnapshot(controller: controller),
-                    if (controller.result != null) ...[
+        builder: (context, _) => ListenableBuilder(
+          listenable: auth ?? controller,
+          builder: (context, _) => SafeArea(
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    SynchroSpacing.gutter,
+                    SynchroSpacing.lg,
+                    SynchroSpacing.gutter,
+                    SynchroSpacing.xxl,
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _Header(
+                        controller: controller,
+                        auth: auth,
+                        onOpenAccount: onOpenAccount,
+                      ),
+                      const SizedBox(height: SynchroSpacing.xl),
+                      _ShortcutRow(
+                        onOpenAccount: onOpenAccount,
+                        onOpenAudit: onOpenAudit,
+                      ),
+                      const SizedBox(height: SynchroSpacing.xl),
+                      _StatusCard(controller: controller),
+                      const SizedBox(height: SynchroSpacing.xl),
+                      _PrimaryActions(
+                        onCreateTimetable: onCreateTimetable,
+                        onRefineTimetable: onRefineTimetable,
+                      ),
+                      const SizedBox(height: SynchroSpacing.xl),
+                      _ManagementActions(
+                        onOpenWorkload: onOpenWorkload,
+                        onOpenRooms: onOpenRooms,
+                        onOpenChanges: onOpenChanges,
+                        onOpenIssues: onOpenIssues,
+                      ),
+                      const SizedBox(height: SynchroSpacing.xl),
+                      _SchedulePreview(controller: controller),
                       const SizedBox(height: SynchroSpacing.lg),
-                      _LatestRun(controller: controller),
-                    ],
-                  ]),
+                      _CampusSnapshot(controller: controller),
+                      if (controller.result != null) ...[
+                        const SizedBox(height: SynchroSpacing.lg),
+                        _LatestRun(controller: controller),
+                      ],
+                    ]),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -78,9 +100,10 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.controller, this.onOpenAccount});
+  const _Header({required this.controller, this.auth, this.onOpenAccount});
 
   final SchedulingController controller;
+  final DemoAuth? auth;
   final VoidCallback? onOpenAccount;
 
   @override
@@ -108,10 +131,19 @@ class _Header extends StatelessWidget {
           ],
         ),
         const SizedBox(height: SynchroSpacing.lg),
-        Text('Good morning', style: theme.textTheme.headlineSmall),
+        Text(
+          auth?.currentUser == null
+              ? 'Good morning'
+              : 'Good morning, ${auth!.currentUser!.name}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.headlineSmall,
+        ),
         const SizedBox(height: SynchroSpacing.xs),
         Text(
-          controller.campus?.name ?? 'Your campus dashboard',
+          auth?.currentUser?.institution ??
+              controller.campus?.name ??
+              'Your campus dashboard',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodyMedium?.copyWith(
@@ -454,6 +486,83 @@ class _PrimaryActions extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ManagementActions extends StatelessWidget {
+  const _ManagementActions({
+    this.onOpenWorkload,
+    this.onOpenRooms,
+    this.onOpenChanges,
+    this.onOpenIssues,
+  });
+
+  final VoidCallback? onOpenWorkload;
+  final VoidCallback? onOpenRooms;
+  final VoidCallback? onOpenChanges;
+  final VoidCallback? onOpenIssues;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text('Manage the draft', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: SynchroSpacing.xs),
+      Text(
+        'Keep workload, rooms, changes and issues close to the timetable editor.',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      const SizedBox(height: SynchroSpacing.md),
+      Wrap(
+        spacing: SynchroSpacing.sm,
+        runSpacing: SynchroSpacing.sm,
+        children: [
+          _ManagementButton(
+            icon: Icons.bar_chart_outlined,
+            label: 'Workload',
+            onPressed: onOpenWorkload,
+          ),
+          _ManagementButton(
+            icon: Icons.meeting_room_outlined,
+            label: 'Rooms',
+            onPressed: onOpenRooms,
+          ),
+          _ManagementButton(
+            icon: Icons.sync_alt_outlined,
+            label: 'Handle a change',
+            onPressed: onOpenChanges,
+          ),
+          _ManagementButton(
+            icon: Icons.rule_folder_outlined,
+            label: 'Issues',
+            onPressed: onOpenIssues,
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+class _ManagementButton extends StatelessWidget {
+  const _ManagementButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: onPressed,
+    icon: Icon(icon, size: 18),
+    label: Text(label),
+    style: OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 44),
+      padding: const EdgeInsets.symmetric(horizontal: SynchroSpacing.md),
+    ),
+  );
 }
 
 class _SchedulePreview extends StatelessWidget {

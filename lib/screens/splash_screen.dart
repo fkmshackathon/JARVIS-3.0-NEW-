@@ -72,6 +72,25 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
+  void _continueDemo() {
+    if (_left || !mounted) return;
+    _left = true;
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        transitionDuration: SynchroMotion.standard,
+        reverseTransitionDuration: SynchroMotion.quick,
+        pageBuilder: (_, _, _) => AppShell(controller: widget.controller),
+        transitionsBuilder: (_, animation, _, child) => FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: SynchroMotion.entrance,
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _sweep.dispose();
@@ -222,6 +241,16 @@ class _SplashScreenState extends State<SplashScreen>
         ),
       ),
       const SizedBox(height: SynchroSpacing.xl),
+      FilledButton.icon(
+        onPressed: _continueDemo,
+        style: FilledButton.styleFrom(
+          backgroundColor: SynchroColors.orange,
+          foregroundColor: SynchroColors.navyDeep,
+        ),
+        icon: const Icon(Icons.science_outlined),
+        label: const Text('Continue with demo mode'),
+      ),
+      const SizedBox(height: SynchroSpacing.sm),
       FilledButton(onPressed: _boot, child: const Text('Retry connection')),
     ];
   }
