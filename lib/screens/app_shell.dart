@@ -43,12 +43,7 @@ class _AppShellState extends State<AppShell> {
       Icons.calendar_view_day_outlined,
       Icons.calendar_view_day,
     ),
-    _Destination(
-      'Conflicts',
-      Icons.rule_folder_outlined,
-      Icons.rule_folder,
-      title: 'Issues',
-    ),
+    _Destination('Issues', Icons.rule_folder_outlined, Icons.rule_folder),
   ];
 
   SchedulingController get controller => widget.controller;
@@ -234,14 +229,11 @@ class _AppShellState extends State<AppShell> {
 }
 
 class _Destination {
-  const _Destination(this.label, this.icon, this.activeIcon, {this.title});
+  const _Destination(this.label, this.icon, this.activeIcon);
 
   final String label;
   final IconData icon;
   final IconData activeIcon;
-  final String? title;
-
-  String get heading => title ?? label;
 
   Widget iconFor(int violations, int index) {
     final plain = Icon(icon);
@@ -296,7 +288,7 @@ class _ShellHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _AppShellState._destinations[index].heading,
+                  _AppShellState._destinations[index].label,
                   style: Theme.of(context).textTheme.titleMedium
                       ?.copyWith(color: SynchroColors.onNavy),
                 ),
