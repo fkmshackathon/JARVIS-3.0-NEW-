@@ -266,16 +266,15 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final result = controller.result;
-    final progress = _progressValue(controller);
     final statusColor = _statusColor(controller);
     final theme = Theme.of(context);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(SynchroSpacing.xl),
-      decoration: BoxDecoration(
-        color: SynchroColors.navyDeep,
-        borderRadius: BorderRadius.circular(SynchroRadius.sheet),
+    return SectionCard(
+      overline: 'Current timetable',
+      title: _statusTitle(controller),
+      trailing: _NavyStatusTag(
+        label: _statusLabel(controller),
+        color: statusColor,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,96 +282,23 @@ class _StatusCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: BoxDecoration(
-                            color: statusColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: SynchroSpacing.sm),
-                        Flexible(
-                          child: Text(
-                            'WORKSPACE STATUS',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: SynchroColors.onNavyMuted,
-                              letterSpacing: SynchroType.overlineTracking,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: SynchroSpacing.md),
-                    Text(
-                      _statusTitle(controller),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        color: SynchroColors.onNavy,
-                      ),
-                    ),
-                    const SizedBox(height: SynchroSpacing.xs),
-                    Text(
-                      _statusDetail(controller),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: SynchroColors.onNavyMuted,
-                      ),
-                    ),
-                  ],
-                ),
+              Icon(
+                result?.publishable == true
+                    ? Icons.verified_outlined
+                    : controller.runPhase == RunPhase.running
+                    ? Icons.sync
+                    : Icons.edit_calendar_outlined,
+                color: statusColor,
+                size: 22,
               ),
               const SizedBox(width: SynchroSpacing.md),
-              if (controller.runPhase == RunPhase.running)
-                const SizedBox.square(
-                  dimension: 48,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    color: SynchroColors.orange,
-                    backgroundColor: SynchroColors.navySoft,
-                  ),
-                )
-              else
-                SynchroMark(size: 48, badge: false, progress: progress),
-            ],
-          ),
-          const SizedBox(height: SynchroSpacing.xl),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(SynchroRadius.pill),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 7,
-              backgroundColor: SynchroColors.navySoft,
-              valueColor: const AlwaysStoppedAnimation(SynchroColors.orange),
-            ),
-          ),
-          const SizedBox(height: SynchroSpacing.md),
-          Row(
-            children: [
               Expanded(
                 child: Text(
-                  _progressLabel(controller),
-                  maxLines: 1,
+                  _statusDetail(controller),
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: SynchroColors.onNavyMuted,
-                  ),
+                  style: theme.textTheme.bodySmall,
                 ),
-              ),
-              const SizedBox(width: SynchroSpacing.sm),
-              _NavyStatusTag(
-                label: _statusLabel(controller),
-                color: statusColor,
               ),
             ],
           ),
@@ -383,7 +309,7 @@ class _StatusCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: SynchroColors.dangerOnNavy,
+                color: theme.colorScheme.error,
               ),
             ),
           ],
@@ -982,17 +908,6 @@ class _LatestRun extends StatelessWidget {
   }
 }
 
-double? _progressValue(SchedulingController controller) {
-  if (controller.runPhase == RunPhase.running) return null;
-
-  final result = controller.result;
-  if (result == null) return 0;
-
-  final total = controller.summary?.sessions ?? 0;
-  if (total <= 0) return result.assignments.isEmpty ? 0 : 1;
-  return (result.assignments.length / total).clamp(0.0, 1.0).toDouble();
-}
-
 String _statusTitle(SchedulingController controller) {
   final result = controller.result;
   final summary = controller.summary;
@@ -1023,25 +938,6 @@ String _statusDetail(SchedulingController controller) {
     return '${controller.campus!.name} · ${summary.sessions} sessions ready to place.';
   }
   return controller.campus!.name;
-}
-
-String _progressLabel(SchedulingController controller) {
-  if (controller.runPhase == RunPhase.running) {
-    return 'Solving live constraints';
-  }
-
-  final result = controller.result;
-  if (result != null) {
-    final total = controller.summary?.sessions ?? 0;
-    if (total > 0) {
-      return '${result.assignments.length} of $total sessions placed';
-    }
-    return '${result.assignments.length} sessions in latest run';
-  }
-
-  final sessions = controller.summary?.sessions;
-  if (sessions != null) return '$sessions sessions ready to schedule';
-  return 'Waiting for campus data';
 }
 
 String _statusLabel(SchedulingController controller) {
