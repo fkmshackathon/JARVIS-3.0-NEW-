@@ -9,7 +9,7 @@ import '../widgets/ui.dart';
 ///
 /// This screen deliberately reads only the in-memory controller. It does not
 /// manufacture an issue when a collection is empty, and it never calls the
-/// server-side validator. The optional callbacks let the shell open the
+/// remote validator. The optional callbacks let the shell open the
 /// timetable editor or another contextual action without coupling this view to
 /// a particular navigation structure.
 class ManualIssuesScreen extends StatelessWidget {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../brand/synchro_mark.dart';
-import '../state/scheduling_controller.dart';
 import '../theme/tokens.dart';
 import 'app_shell.dart';
 
@@ -9,11 +8,7 @@ import 'app_shell.dart';
 /// intentionally not contacted during startup; the manual timetable workspace
 /// is usable with local demo data before any external service is configured.
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key, required this.controller});
-
-  /// Kept for compatibility with the existing application boundary. Startup
-  /// does not call it in the frontend-only prototype.
-  final SchedulingController controller;
+  const SplashScreen({super.key});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -42,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen>
       PageRouteBuilder(
         transitionDuration: SynchroMotion.standard,
         reverseTransitionDuration: SynchroMotion.quick,
-        pageBuilder: (_, _, _) => AppShell(controller: widget.controller),
+        pageBuilder: (_, _, _) => const AppShell(),
         transitionsBuilder: (_, animation, _, child) => FadeTransition(
           opacity: CurvedAnimation(
             parent: animation,

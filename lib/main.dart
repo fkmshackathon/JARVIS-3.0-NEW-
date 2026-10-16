@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
 
 import 'screens/splash_screen.dart';
-import 'state/scheduling_controller.dart';
 import 'theme/synchro_theme.dart';
 import 'theme/theme_controller.dart';
 import 'widgets/app_frame.dart';
 
 void main() {
-  runApp(SynchroApp(controller: SchedulingController()));
+  runApp(const SynchroApp());
 }
 
 class SynchroApp extends StatefulWidget {
-  const SynchroApp({super.key, required this.controller});
-
-  final SchedulingController controller;
+  const SynchroApp({super.key});
 
   @override
   State<SynchroApp> createState() => _SynchroAppState();
@@ -32,7 +29,7 @@ class _SynchroAppState extends State<SynchroApp> {
         themeMode: mode,
         builder: (context, child) =>
             AppFrame(child: child ?? const SizedBox.shrink()),
-        home: SplashScreen(controller: widget.controller),
+        home: const SplashScreen(),
       ),
     );
   }

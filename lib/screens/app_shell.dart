@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../brand/synchro_mark.dart';
 import '../state/manual_timetable_controller.dart';
-import '../state/scheduling_controller.dart';
 import '../theme/theme_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
@@ -14,13 +13,11 @@ import 'manual_timetable_screen.dart';
 import 'manual_workload_screen.dart';
 import 'timetable_hub_screen.dart';
 
-/// The compact product shell. Home is the starting point; the solver output and
-/// validator remain one tap away, while the longer setup and refinement workflows
-/// live behind contextual actions rather than permanent tabs.
+/// The compact product shell for the local timetable workspace. Home is the
+/// starting point; issues, workload, rooms, and change handling stay one tap
+/// away without adding redundant primary tabs.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.controller});
-
-  final SchedulingController controller;
+  const AppShell({super.key});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -40,8 +37,6 @@ class _AppShellState extends State<AppShell> {
     ),
     _Destination('Issues', Icons.rule_folder_outlined, Icons.rule_folder),
   ];
-
-  SchedulingController get controller => widget.controller;
 
   @override
   void initState() {
@@ -116,7 +111,6 @@ class _AppShellState extends State<AppShell> {
       onOpenIssues: _openIssues,
     ),
     1 => TimetableHubScreen(
-      controller: controller,
       manualController: _manualController,
       onOpenWorkload: _openWorkload,
       onOpenRooms: _openRooms,
