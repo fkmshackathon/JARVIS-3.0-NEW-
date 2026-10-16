@@ -15,12 +15,14 @@ class HomeScreen extends StatelessWidget {
     this.onCreateTimetable,
     this.onRefineTimetable,
     this.onOpenAccount,
+    this.onOpenAudit,
   });
 
   final SchedulingController controller;
   final VoidCallback? onCreateTimetable;
   final VoidCallback? onRefineTimetable;
   final VoidCallback? onOpenAccount;
+  final VoidCallback? onOpenAudit;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +51,14 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: SynchroSpacing.xl),
                     _LiveSummary(controller: controller),
+                    if (onOpenAudit != null) ...[
+                      const SizedBox(height: SynchroSpacing.md),
+                      OutlinedButton.icon(
+                        onPressed: onOpenAudit,
+                        icon: const Icon(Icons.tune_outlined),
+                        label: const Text('Review workload and rooms'),
+                      ),
+                    ],
                     if (controller.result != null) ...[
                       const SizedBox(height: SynchroSpacing.lg),
                       _LatestRun(controller: controller),

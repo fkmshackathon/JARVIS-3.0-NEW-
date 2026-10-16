@@ -17,14 +17,22 @@ class AccountScreen extends StatefulWidget {
 }
 
 class _AccountScreenState extends State<AccountScreen> {
+  final TextEditingController _name = TextEditingController();
+  final TextEditingController _institution = TextEditingController();
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
+  final TextEditingController _confirmPassword = TextEditingController();
   bool _obscurePassword = true;
+  bool _createAccount = false;
+  String _role = 'coordinator';
 
   @override
   void dispose() {
+    _name.dispose();
+    _institution.dispose();
     _email.dispose();
     _password.dispose();
+    _confirmPassword.dispose();
     super.dispose();
   }
 
@@ -75,6 +83,36 @@ class _AccountScreenState extends State<AccountScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment<bool>(
+                        value: false,
+                        label: Text('Sign in'),
+                        icon: Icon(Icons.login),
+                      ),
+                      ButtonSegment<bool>(
+                        value: true,
+                        label: Text('Create account'),
+                        icon: Icon(Icons.person_add_alt_1_outlined),
+                      ),
+                    ],
+                    selected: {_createAccount},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _createAccount = selection.first),
+                  ),
+                  if (_createAccount) ...[
+                    const SizedBox(height: SynchroSpacing.md),
+                    TextField(
+                      controller: _name,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.name],
+                      decoration: const InputDecoration(
+                        labelText: 'Full name',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: SynchroSpacing.md),
                   TextField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
@@ -113,23 +151,87 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                     ),
                   ),
+                  if (_createAccount) ...[
+                    const SizedBox(height: SynchroSpacing.md),
+                    TextField(
+                      controller: _confirmPassword,
+                      obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        labelText: 'Confirm password',
+                        prefixIcon: Icon(Icons.verified_user_outlined),
+                      ),
+                    ),
+                  ] else ...[
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: null,
+                        child: const Text('Forgot password?'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: SynchroSpacing.lg),
                   FilledButton.icon(
                     onPressed: null,
                     icon: const Icon(Icons.login),
-                    label: const Text('Sign in'),
-                  ),
-                  const SizedBox(height: SynchroSpacing.sm),
-                  OutlinedButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.person_add_alt_1_outlined),
-                    label: const Text('Create account'),
+                    label: Text(_createAccount ? 'Create account' : 'Sign in'),
                   ),
                   const SizedBox(height: SynchroSpacing.md),
                   Text(
                     'These controls will become available only after an authentication provider is configured.',
                     style: Theme.of(context).textTheme.bodySmall,
                     textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: SynchroSpacing.lg),
+            SectionCard(
+              overline: 'Profile and role',
+              title: 'Prepare your workspace',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'These details can be saved after a real account provider and profile endpoint are connected.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: SynchroSpacing.md),
+                  TextField(
+                    controller: _institution,
+                    decoration: const InputDecoration(
+                      labelText: 'Institution or college',
+                      prefixIcon: Icon(Icons.school_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: SynchroSpacing.md),
+                  Text(
+                    'Role in institution',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: SynchroSpacing.sm),
+                  Wrap(
+                    spacing: SynchroSpacing.sm,
+                    runSpacing: SynchroSpacing.sm,
+                    children: [
+                      for (final role in const {
+                        'coordinator': 'Timetable coordinator',
+                        'faculty': 'Faculty / teacher',
+                        'student': 'Student',
+                      }.entries)
+                        ChoiceChip(
+                          label: Text(role.value),
+                          selected: _role == role.key,
+                          onSelected: (_) => setState(() => _role = role.key),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: SynchroSpacing.lg),
+                  OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Save profile'),
                   ),
                 ],
               ),

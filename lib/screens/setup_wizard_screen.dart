@@ -141,11 +141,11 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
   }
 
   static String _stepTitle(int step) => switch (step) {
-    0 => 'Campus',
-    1 => 'Demand',
+    0 => 'Semester setup',
+    1 => 'Workload',
     2 => 'Faculty',
-    3 => 'Rooms and batches',
-    4 => 'Review',
+    3 => 'Subjects and rooms',
+    4 => 'Constraints',
     5 => 'Generate',
     _ => 'Review',
   };
@@ -621,6 +621,42 @@ class _RoomsAndBatchesStep extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: SynchroSpacing.lg),
+        SectionCard(
+          overline: 'Subjects',
+          title: 'Teaching requirements',
+          trailing: StatusChip(label: '${campus.subjects.length} subjects'),
+          child: campus.subjects.isEmpty
+              ? Text(
+                  'No subjects were returned.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                )
+              : Column(
+                  children: [
+                    for (final subject in campus.subjects)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: SynchroSpacing.sm,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                subject.name,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
+                            Text(
+                              '${subject.lectureHours} lecture · ${subject.labHours} lab',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+        ),
       ],
     );
   }
@@ -661,6 +697,10 @@ class _ReviewStep extends StatelessWidget {
                 '${controller.timeLimitSeconds.toInt()} seconds',
               ),
               _ReviewLine('Seed', '${controller.randomSeed}'),
+              const _ReviewLine(
+                'Constraints',
+                'Hard feasibility rules and soft optimization costs stay on the server.',
+              ),
               if (summary?.blocker != null) ...[
                 const SizedBox(height: SynchroSpacing.md),
                 Notice(

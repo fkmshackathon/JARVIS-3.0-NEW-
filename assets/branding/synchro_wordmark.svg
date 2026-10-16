@@ -1,0 +1,13 @@
+<svg width="760" height="180" viewBox="0 0 760 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="180" height="180" rx="42" fill="#0D2B60"/>
+  <path d="M51 66C59 46 78 32 101 32C129 32 151 54 153 81" stroke="#A9B6D6" stroke-width="9" stroke-linecap="round"/>
+  <path d="M129 114C121 134 102 148 79 148C51 148 29 126 27 99" stroke="#A9B6D6" stroke-width="9" stroke-linecap="round"/>
+  <path d="M151 81L161 71L162 87" stroke="#FF8A32" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M29 99L19 109L18 93" stroke="#FF8A32" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="61" y="58" width="22" height="22" rx="5" fill="#F7F4EC"/>
+  <rect x="97" y="58" width="22" height="22" rx="5" fill="#F7F4EC"/>
+  <rect x="61" y="94" width="22" height="22" rx="5" fill="#FF8A32"/>
+  <rect x="97" y="94" width="22" height="22" rx="5" fill="#F7F4EC"/>
+  <text x="218" y="103" fill="#0D2B60" font-family="Arial, sans-serif" font-size="62" font-weight="700" letter-spacing="8">SYNCHRO</text>
+  <text x="222" y="137" fill="#55618A" font-family="Arial, sans-serif" font-size="16" font-weight="600" letter-spacing="5">SMART CAMPUS SCHEDULING</text>
+</svg>

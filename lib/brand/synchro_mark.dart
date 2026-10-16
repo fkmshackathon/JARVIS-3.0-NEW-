@@ -43,7 +43,12 @@ class SynchroMark extends StatelessWidget {
 }
 
 class _Palette {
-  const _Palette({required this.plate, required this.cycle, required this.grid, required this.accent});
+  const _Palette({
+    required this.plate,
+    required this.cycle,
+    required this.grid,
+    required this.accent,
+  });
 
   final Color plate;
   final Color cycle;
@@ -78,7 +83,11 @@ class _Palette {
 }
 
 class _MarkPainter extends CustomPainter {
-  const _MarkPainter({required this.badge, required this.progress, required this.palette});
+  const _MarkPainter({
+    required this.badge,
+    required this.progress,
+    required this.palette,
+  });
 
   final bool badge;
   final double? progress;
@@ -95,7 +104,12 @@ class _MarkPainter extends CustomPainter {
     }
 
     final inset = size.width * 0.16;
-    final ring = Rect.fromLTWH(inset, inset, size.width - inset * 2, size.height - inset * 2);
+    final ring = Rect.fromLTWH(
+      inset,
+      inset,
+      size.width - inset * 2,
+      size.height - inset * 2,
+    );
 
     // The cycle: two arcs with a gap each side, one ending in an arrowhead.
     final stroke = Paint()
@@ -120,13 +134,22 @@ class _MarkPainter extends CustomPainter {
           ..strokeWidth = size.width * 0.055,
       );
     }
-    _arrowhead(canvas, ring, math.pi * 0.16 + math.pi * 0.84, palette.accent, size);
+    _arrowhead(
+      canvas,
+      ring,
+      math.pi * 0.16 + math.pi * 0.84,
+      palette.accent,
+      size,
+    );
 
     // The grid: four periods, the lower-left one resolved in orange.
     final cell = size.width * 0.115;
     final gap = cell * 0.42;
     final centre = ring.center;
-    final origin = Offset(centre.dx - cell - gap / 2, centre.dy - cell - gap / 2);
+    final origin = Offset(
+      centre.dx - cell - gap / 2,
+      centre.dy - cell - gap / 2,
+    );
     for (var row = 0; row < 2; row++) {
       for (var column = 0; column < 2; column++) {
         final cellRect = Rect.fromLTWH(
@@ -144,7 +167,13 @@ class _MarkPainter extends CustomPainter {
     }
   }
 
-  void _arrowhead(Canvas canvas, Rect ring, double angle, Color color, Size size) {
+  void _arrowhead(
+    Canvas canvas,
+    Rect ring,
+    double angle,
+    Color color,
+    Size size,
+  ) {
     final tip = Offset(
       ring.center.dx + ring.width / 2 * math.cos(angle),
       ring.center.dy + ring.height / 2 * math.sin(angle),
@@ -152,9 +181,18 @@ class _MarkPainter extends CustomPainter {
     final head = size.width * 0.085;
     final direction = angle + math.pi / 2;
     final path = Path()
-      ..moveTo(tip.dx + head * math.cos(direction), tip.dy + head * math.sin(direction))
-      ..lineTo(tip.dx + head * 0.7 * math.cos(direction + 2.4), tip.dy + head * 0.7 * math.sin(direction + 2.4))
-      ..lineTo(tip.dx + head * 0.7 * math.cos(direction - 2.4), tip.dy + head * 0.7 * math.sin(direction - 2.4))
+      ..moveTo(
+        tip.dx + head * math.cos(direction),
+        tip.dy + head * math.sin(direction),
+      )
+      ..lineTo(
+        tip.dx + head * 0.7 * math.cos(direction + 2.4),
+        tip.dy + head * 0.7 * math.sin(direction + 2.4),
+      )
+      ..lineTo(
+        tip.dx + head * 0.7 * math.cos(direction - 2.4),
+        tip.dy + head * 0.7 * math.sin(direction - 2.4),
+      )
       ..close();
     canvas.drawPath(path, Paint()..color = color);
   }
@@ -169,7 +207,12 @@ class _MarkPainter extends CustomPainter {
 
 /// Wordmark lockup used on the splash and in the app bar.
 class SynchroWordmark extends StatelessWidget {
-  const SynchroWordmark({super.key, this.size = 44, this.onDark = true, this.progress});
+  const SynchroWordmark({
+    super.key,
+    this.size = 44,
+    this.onDark = true,
+    this.progress,
+  });
 
   final double size;
   final bool onDark;
@@ -178,36 +221,42 @@ class SynchroWordmark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ink = onDark ? SynchroColors.onNavy : SynchroColors.navyDeep;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SynchroMark(size: size, badge: true, progress: progress),
-        const SizedBox(width: SynchroSpacing.md),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'SYNCHRO',
-              style: TextStyle(
-                fontSize: size * 0.42,
-                fontWeight: FontWeight.w700,
-                letterSpacing: SynchroType.overlineTracking * 0.75,
-                color: ink,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SynchroMark(size: size, badge: true, progress: progress),
+          const SizedBox(width: SynchroSpacing.md),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'SYNCHRO',
+                style: TextStyle(
+                  fontSize: size * 0.42,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: SynchroType.overlineTracking * 0.75,
+                  color: ink,
+                ),
               ),
-            ),
-            Text(
-              'SMART CAMPUS SCHEDULING',
-              style: TextStyle(
-                fontSize: size * 0.16,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1.1,
-                color: onDark ? SynchroColors.onNavyMuted : SynchroColors.inkMuted,
+              Text(
+                'SMART CAMPUS SCHEDULING',
+                style: TextStyle(
+                  fontSize: size * 0.16,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1.1,
+                  color: onDark
+                      ? SynchroColors.onNavyMuted
+                      : SynchroColors.inkMuted,
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

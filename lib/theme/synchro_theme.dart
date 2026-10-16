@@ -47,6 +47,7 @@ abstract final class SynchroTheme {
         backgroundColor: SynchroColors.surface,
         indicatorColor: SynchroColors.cream,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        height: 68,
       ),
     );
   }
@@ -86,29 +87,67 @@ abstract final class SynchroTheme {
           side: const BorderSide(color: SynchroColors.navySoft),
         ),
       ),
-      dividerTheme: const DividerThemeData(color: SynchroColors.navySoft, thickness: 1, space: 1),
+      dividerTheme: const DividerThemeData(
+        color: SynchroColors.navySoft,
+        thickness: 1,
+        space: 1,
+      ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: SynchroColors.navy,
         indicatorColor: SynchroColors.navySoft,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        height: 68,
       ),
     );
   }
 
   static ThemeData _base(ColorScheme scheme, Color scaffold) {
     final text = TextTheme(
-      displaySmall: _style(SynchroType.display, FontWeight.w700, scheme.onSurface,
-          letterSpacing: -0.4, height: 1.1),
-      headlineSmall: _style(SynchroType.title, FontWeight.w700, scheme.onSurface, height: 1.2),
-      titleMedium: _style(SynchroType.section, FontWeight.w600, scheme.onSurface),
+      displaySmall: _style(
+        SynchroType.display,
+        FontWeight.w700,
+        scheme.onSurface,
+        letterSpacing: -0.4,
+        height: 1.1,
+      ),
+      headlineSmall: _style(
+        SynchroType.title,
+        FontWeight.w700,
+        scheme.onSurface,
+        height: 1.2,
+      ),
+      titleMedium: _style(
+        SynchroType.section,
+        FontWeight.w600,
+        scheme.onSurface,
+      ),
       titleSmall: _style(SynchroType.label, FontWeight.w700, scheme.onSurface),
-      bodyLarge: _style(SynchroType.body + 1, FontWeight.w400, scheme.onSurface, height: 1.45),
-      bodyMedium: _style(SynchroType.body, FontWeight.w400, scheme.onSurface, height: 1.45),
-      bodySmall: _style(SynchroType.label, FontWeight.w400, scheme.onSurfaceVariant, height: 1.4),
+      bodyLarge: _style(
+        SynchroType.body + 1,
+        FontWeight.w400,
+        scheme.onSurface,
+        height: 1.45,
+      ),
+      bodyMedium: _style(
+        SynchroType.body,
+        FontWeight.w400,
+        scheme.onSurface,
+        height: 1.45,
+      ),
+      bodySmall: _style(
+        SynchroType.label,
+        FontWeight.w400,
+        scheme.onSurfaceVariant,
+        height: 1.4,
+      ),
       labelLarge: _style(SynchroType.label, FontWeight.w700, scheme.onPrimary),
       labelMedium: _style(SynchroType.label, FontWeight.w600, scheme.onSurface),
-      labelSmall: _style(SynchroType.micro, FontWeight.w700, scheme.onSurfaceVariant,
-          letterSpacing: SynchroType.overlineTracking),
+      labelSmall: _style(
+        SynchroType.micro,
+        FontWeight.w700,
+        scheme.onSurfaceVariant,
+        letterSpacing: SynchroType.overlineTracking,
+      ),
     );
 
     return ThemeData(
@@ -124,8 +163,14 @@ abstract final class SynchroTheme {
           foregroundColor: SynchroColors.onNavy,
           minimumSize: const Size(0, 50),
           padding: const EdgeInsets.symmetric(horizontal: SynchroSpacing.xl),
-          textStyle: _style(SynchroType.body, FontWeight.w700, SynchroColors.onNavy),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SynchroRadius.card)),
+          textStyle: _style(
+            SynchroType.body,
+            FontWeight.w700,
+            SynchroColors.onNavy,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(SynchroRadius.card),
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -133,14 +178,42 @@ abstract final class SynchroTheme {
           foregroundColor: scheme.onSurface,
           minimumSize: const Size(0, 46),
           side: BorderSide(color: scheme.outline),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SynchroRadius.card)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(SynchroRadius.card),
+          ),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: scheme.surfaceContainerLow,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: SynchroSpacing.lg,
+          vertical: SynchroSpacing.md,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(SynchroRadius.card),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(SynchroRadius.card),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(SynchroRadius.card),
+          borderSide: BorderSide(color: scheme.primary, width: 2),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: scheme.surfaceContainerLow,
         side: BorderSide(color: scheme.outlineVariant),
-        labelStyle: _style(SynchroType.label, FontWeight.w600, scheme.onSurface),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SynchroRadius.chip)),
+        labelStyle: _style(
+          SynchroType.label,
+          FontWeight.w600,
+          scheme.onSurface,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(SynchroRadius.chip),
+        ),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: scheme.primary,
@@ -149,8 +222,14 @@ abstract final class SynchroTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: SynchroColors.navyDeep,
-        contentTextStyle: _style(SynchroType.label, FontWeight.w500, SynchroColors.onNavy),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(SynchroRadius.chip)),
+        contentTextStyle: _style(
+          SynchroType.label,
+          FontWeight.w500,
+          SynchroColors.onNavy,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(SynchroRadius.chip),
+        ),
       ),
     );
   }
@@ -161,12 +240,11 @@ abstract final class SynchroTheme {
     Color color, {
     double letterSpacing = SynchroType.tracking,
     double height = 1.25,
-  }) =>
-      TextStyle(
-        fontSize: size,
-        fontWeight: weight,
-        color: color,
-        letterSpacing: letterSpacing,
-        height: height,
-      );
+  }) => TextStyle(
+    fontSize: size,
+    fontWeight: weight,
+    color: color,
+    letterSpacing: letterSpacing,
+    height: height,
+  );
 }

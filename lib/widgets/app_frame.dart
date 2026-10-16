@@ -19,15 +19,33 @@ class AppFrame extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     if (size.width <= _breakpoint) return child;
 
-    final width = math.max(240.0, math.min(SynchroLayout.phoneWidth, size.width - SynchroSpacing.xl * 2));
-    final height = math.max(360.0, math.min(SynchroLayout.phoneHeight, size.height - SynchroSpacing.xl * 2));
+    final width = math.max(
+      240.0,
+      math.min(SynchroLayout.phoneWidth, size.width - SynchroSpacing.xl * 2),
+    );
+    final height = math.max(
+      360.0,
+      math.min(SynchroLayout.phoneHeight, size.height - SynchroSpacing.xl * 2),
+    );
 
     return ColoredBox(
-      color: SynchroColors.navyDeep,
+      color: SynchroColors.outer,
       child: Center(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
-          child: SizedBox(width: width, height: height, child: child),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: SynchroColors.creamPale,
+              boxShadow: [
+                BoxShadow(
+                  color: SynchroColors.navyDeep.withValues(alpha: 0.18),
+                  blurRadius: 34,
+                  offset: const Offset(0, 18),
+                ),
+              ],
+            ),
+            child: SizedBox(width: width, height: height, child: child),
+          ),
         ),
       ),
     );

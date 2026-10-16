@@ -5,12 +5,17 @@ import '../state/scheduling_controller.dart';
 import '../theme/theme_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
+import 'account_screen.dart';
 import 'audit_screen.dart';
 import 'conflicts_screen.dart';
+import 'home_screen.dart';
+import 'refine_screen.dart';
+import 'setup_wizard_screen.dart';
 import 'timetable_screen.dart';
 
-/// Three destinations, in the order a coordinator actually works: read the
-/// workload, generate, then check what the validator said.
+/// The compact product shell. Home is the starting point; the solver output and
+/// validator remain one tap away, while the longer setup and refinement workflows
+/// live behind contextual actions rather than permanent tabs.
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.controller});
 
@@ -24,50 +29,49 @@ class _AppShellState extends State<AppShell> {
   int _index = 0;
 
   static const List<_Destination> _destinations = [
-    _Destination('Workload', Icons.assignment_outlined, Icons.assignment),
-    _Destination('Timetable', Icons.grid_view_outlined, Icons.grid_view),
+    _Destination('Home', Icons.home_outlined, Icons.home),
+    _Destination(
+      'Timetable',
+      Icons.calendar_view_day_outlined,
+      Icons.calendar_view_day,
+    ),
     _Destination('Conflicts', Icons.rule_folder_outlined, Icons.rule_folder),
   ];
+
+  SchedulingController get controller => widget.controller;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: ListenableBuilder(
-        listenable: widget.controller,
-        builder: (context, _) {
-          final screens = [
-            AuditScreen(controller: widget.controller),
-            TimetableScreen(controller: widget.controller),
-            ConflictsScreen(controller: widget.controller),
-          ];
-          return SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                _Header(controller: widget.controller),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: SynchroMotion.quick,
-                    switchInCurve: SynchroMotion.entrance,
-                    child: KeyedSubtree(
-                      key: ValueKey(_index),
-                      child: screens[_index],
-                    ),
+        listenable: controller,
+        builder: (context, _) => SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              if (_index != 0)
+                _ShellHeader(index: _index, controller: controller),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: SynchroMotion.quick,
+                  switchInCurve: SynchroMotion.entrance,
+                  switchOutCurve: Curves.easeIn,
+                  child: KeyedSubtree(
+                    key: ValueKey(_index),
+                    child: _screenFor(_index),
                   ),
                 ),
-              ],
-            ),
-          );
-        },
+              ),
+            ],
+          ),
+        ),
       ),
       bottomNavigationBar: ListenableBuilder(
-        listenable: widget.controller,
+        listenable: controller,
         builder: (context, _) {
-          // Only the conflicts tab earns a badge, because a badge there is a warning.
-          final violations = widget.controller.result?.violations.length ?? 0;
+          final violations = controller.result?.violations.length ?? 0;
           return NavigationBar(
             selectedIndex: _index,
-            height: 68,
             onDestinationSelected: (value) => setState(() => _index = value),
             destinations: [
               for (var i = 0; i < _destinations.length; i++)
@@ -81,6 +85,77 @@ class _AppShellState extends State<AppShell> {
         },
       ),
     );
+  }
+
+  Widget _screenFor(int index) => switch (index) {
+    0 => HomeScreen(
+      controller: controller,
+      onCreateTimetable: _openSetup,
+      onRefineTimetable: _openRefine,
+      onOpenAccount: _openAccount,
+      onOpenAudit: _openAudit,
+    ),
+    1 => TimetableScreen(controller: controller),
+    _ => ConflictsScreen(controller: controller),
+  };
+
+  void _openSetup() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SetupWizardScreen(
+          controller: controller,
+          onBack: () => Navigator.of(context).pop(),
+          onOpenTimetable: _returnToTimetable,
+          onGenerated: (result) {
+            if (result.solved) _returnToTimetable();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _openRefine() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RefineScreen(
+          controller: controller,
+          onBack: () => Navigator.of(context).pop(),
+          onOpenTimetable: _returnToTimetable,
+        ),
+      ),
+    );
+  }
+
+  void _openAccount() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            AccountScreen(onBack: () => Navigator.of(context).pop()),
+      ),
+    );
+  }
+
+  void _openAudit() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            title: const Text('Campus setup'),
+            leading: IconButton(
+              tooltip: 'Back',
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.arrow_back),
+            ),
+          ),
+          body: AuditScreen(controller: controller),
+        ),
+      ),
+    );
+  }
+
+  void _returnToTimetable() {
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+    setState(() => _index = 1);
   }
 }
 
@@ -103,58 +178,73 @@ class _Destination {
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.controller});
+class _ShellHeader extends StatelessWidget {
+  const _ShellHeader({required this.index, required this.controller});
 
+  final int index;
   final SchedulingController controller;
 
   @override
   Widget build(BuildContext context) {
-    final campus = controller.campus;
-    final solved = controller.result != null && controller.result!.solved;
-    final publishable = controller.result?.publishable ?? false;
+    final result = controller.result;
+    final status = result == null
+        ? const _ShellStatus(label: 'Ready', tone: Tone.neutral)
+        : _ShellStatus(
+            label: result.publishable
+                ? 'Validated'
+                : result.solved
+                ? 'Needs review'
+                : 'No result',
+            tone: result.publishable
+                ? Tone.good
+                : result.solved
+                ? Tone.warn
+                : Tone.bad,
+          );
 
     return Container(
       color: SynchroColors.navy,
-      padding: const EdgeInsets.fromLTRB(SynchroSpacing.gutter, SynchroSpacing.md, SynchroSpacing.gutter, SynchroSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        SynchroSpacing.gutter,
+        SynchroSpacing.sm,
+        SynchroSpacing.sm,
+        SynchroSpacing.md,
+      ),
       child: Row(
         children: [
-          const SynchroMark(size: 40, badge: false),
+          const SynchroMark(size: 34, badge: false),
           const SizedBox(width: SynchroSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  campus?.name ?? 'SYNCHRO',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: SynchroColors.onNavy),
+                  _AppShellState._destinations[index].label,
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(color: SynchroColors.onNavy),
                 ),
                 Text(
-                  controller.backendUrl.replaceFirst('http://', ''),
+                  controller.campus?.name ?? 'SYNCHRO workspace',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: SynchroColors.onNavyMuted),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: SynchroColors.onNavyMuted),
                 ),
               ],
             ),
           ),
-          _Pulse(
-            label: publishable
-                ? 'PUBLISHABLE'
-                : solved
-                    ? 'SOLVED'
-                    : 'NO TIMETABLE',
-            tone: publishable ? Tone.good : solved ? Tone.warn : Tone.neutral,
-          ),
+          status,
           ValueListenableBuilder<ThemeMode>(
             valueListenable: appThemeMode,
             builder: (context, mode, _) => IconButton(
-              tooltip: mode == ThemeMode.light ? 'Switch to dark' : 'Switch to light',
+              tooltip: mode == ThemeMode.light
+                  ? 'Switch to dark'
+                  : 'Switch to light',
               onPressed: () => appThemeMode.value = toggleTheme(mode),
               icon: Icon(
-                mode == ThemeMode.light ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                mode == ThemeMode.light
+                    ? Icons.dark_mode_outlined
+                    : Icons.light_mode_outlined,
                 size: 20,
                 color: SynchroColors.onNavyMuted,
               ),
@@ -166,35 +256,16 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// On-navy status pill: the light tones in [StatusChip] are tuned for cream.
-class _Pulse extends StatelessWidget {
-  const _Pulse({required this.label, required this.tone});
+class _ShellStatus extends StatelessWidget {
+  const _ShellStatus({required this.label, required this.tone});
 
   final String label;
   final Tone tone;
 
   @override
-  Widget build(BuildContext context) {
-    final ink = switch (tone) {
-      Tone.good => SynchroColors.cream,
-      Tone.warn => SynchroColors.orange,
-      _ => SynchroColors.onNavyMuted,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: SynchroSpacing.md, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(SynchroRadius.pill),
-        border: Border.all(color: ink.withValues(alpha: 0.55)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: SynchroType.micro,
-          fontWeight: FontWeight.w700,
-          letterSpacing: SynchroType.overlineTracking * 0.6,
-          color: ink,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => StatusChip(
+    label: label,
+    tone: tone,
+    icon: tone == Tone.good ? Icons.verified_outlined : null,
+  );
 }

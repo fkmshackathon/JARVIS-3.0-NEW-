@@ -296,6 +296,14 @@ class _ResultStrip extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          StatusChip(
+            label: result.publishable ? 'PUBLISHABLE' : 'NOT PUBLISHABLE',
+            tone: result.publishable ? Tone.good : Tone.bad,
+            icon: result.publishable
+                ? Icons.verified_outlined
+                : Icons.gpp_bad_outlined,
+          ),
+          const SizedBox(height: SynchroSpacing.lg),
           Wrap(
             spacing: SynchroSpacing.lg,
             runSpacing: SynchroSpacing.md,

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../brand/synchro_mark.dart';
@@ -19,16 +17,16 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _sweep = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  )..repeat();
+    duration: SynchroMotion.settle,
+  )..forward();
 
   bool _checking = true;
   bool _failed = false;
   bool _left = false;
-  final Stopwatch _clock = Stopwatch();
 
   @override
   void initState() {
@@ -41,10 +39,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       _checking = true;
       _failed = false;
     });
-    _clock
-      ..reset()
-      ..start();
-
     await widget.controller.connect();
     if (!mounted || _left) return;
     if (widget.controller.phase == LinkPhase.offline) {
@@ -59,10 +53,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       return;
     }
 
-    // Hold the brand for its full beat so the launch reads as designed, but never
-    // stall past it to pretend at a loading state.
-    final remaining = SynchroMotion.splash - _clock.elapsed;
-    if (remaining > Duration.zero) await Future<void>.delayed(remaining);
     if (!mounted || _left) return;
 
     _left = true;
@@ -72,7 +62,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         reverseTransitionDuration: SynchroMotion.quick,
         pageBuilder: (_, _, _) => AppShell(controller: widget.controller),
         transitionsBuilder: (_, animation, _, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: SynchroMotion.entrance),
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: SynchroMotion.entrance,
+          ),
           child: child,
         ),
       ),
@@ -94,7 +87,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           const _NavyBackdrop(),
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: SynchroSpacing.xxl, vertical: SynchroSpacing.xxl),
+              padding: const EdgeInsets.symmetric(
+                horizontal: SynchroSpacing.xxl,
+                vertical: SynchroSpacing.xxl,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: _failed ? _failure(context) : _brand(context),
@@ -107,57 +103,80 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   List<Widget> _brand(BuildContext context) => [
-        const SizedBox(height: 90),
-        Center(
-          child: AnimatedBuilder(
-            animation: _sweep,
-            builder: (_, _) => SynchroMark(size: 112, progress: Curves.easeOutCubic.transform(_sweep.value)),
+    const SizedBox(height: 72),
+    Center(
+      child: AnimatedBuilder(
+        animation: _sweep,
+        builder: (_, _) => FadeTransition(
+          opacity: CurvedAnimation(parent: _sweep, curve: Curves.easeOut),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1).animate(
+              CurvedAnimation(parent: _sweep, curve: SynchroMotion.entrance),
+            ),
+            child: SynchroWordmark(
+              size: 104,
+              onDark: true,
+              progress: Curves.easeOutCubic.transform(_sweep.value),
+            ),
           ),
         ),
-        const SizedBox(height: SynchroSpacing.xl),
-        Text(
-          'SYNCHRO',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(color: SynchroColors.onNavy),
-        ),
-        const SizedBox(height: SynchroSpacing.sm),
-        Text(
-          'Automated smart-campus timetable generation',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: SynchroColors.onNavyMuted),
-        ),
-        const SizedBox(height: SynchroSpacing.xxl),
-        SizedBox(
-          width: 140,
-          child: Column(
-            children: [
-              Text(
-                _checking ? 'CONTACTING SOLVER' : 'LOADING CAMPUS',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: SynchroColors.onNavyMuted),
-              ),
-              const SizedBox(height: SynchroSpacing.md),
-              const LinearProgressIndicator(minHeight: 2),
-            ],
+      ),
+    ),
+    const SizedBox(height: SynchroSpacing.xxl),
+    Text(
+      'A clearer week starts here.',
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.titleMedium
+          ?.copyWith(color: SynchroColors.onNavy),
+    ),
+    const SizedBox(height: SynchroSpacing.sm),
+    Text(
+      'Smart campus scheduling, checked by the solver.',
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.bodyMedium
+          ?.copyWith(color: SynchroColors.onNavyMuted),
+    ),
+    const SizedBox(height: SynchroSpacing.xxl),
+    SizedBox(
+      width: 140,
+      child: Column(
+        children: [
+          Text(
+            _checking ? 'CONTACTING SOLVER' : 'LOADING CAMPUS',
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: SynchroColors.onNavyMuted),
           ),
-        ),
-      ];
+          const SizedBox(height: SynchroSpacing.md),
+          const LinearProgressIndicator(minHeight: 2),
+        ],
+      ),
+    ),
+  ];
 
   List<Widget> _failure(BuildContext context) {
     final message = widget.controller.linkError ?? 'The solver did not answer.';
     return [
-      const SizedBox(height: 70),
-      const Icon(Icons.lan_outlined, size: 56, color: SynchroColors.orange),
+      const SizedBox(height: 60),
+      const SynchroWordmark(size: 72, onDark: true),
+      const SizedBox(height: SynchroSpacing.xxl),
+      const Icon(
+        Icons.cloud_off_outlined,
+        size: 44,
+        color: SynchroColors.orange,
+      ),
       const SizedBox(height: SynchroSpacing.xl),
       Text(
         'Backend unreachable',
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: SynchroColors.onNavy),
+        style: Theme.of(context).textTheme.headlineSmall
+            ?.copyWith(color: SynchroColors.onNavy),
       ),
       const SizedBox(height: SynchroSpacing.md),
       Text(
         message,
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: SynchroColors.onNavyMuted),
+        style: Theme.of(context).textTheme.bodyMedium
+            ?.copyWith(color: SynchroColors.onNavyMuted),
       ),
       const SizedBox(height: SynchroSpacing.xl),
       Container(
@@ -174,20 +193,30 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             const SizedBox(height: 2),
             SelectableText(
               widget.controller.backendUrl,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: SynchroType.body),
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: SynchroType.body,
+              ),
             ),
             const SizedBox(height: SynchroSpacing.lg),
-            Text('Start the backend with', style: Theme.of(context).textTheme.labelSmall),
+            Text(
+              'Start the backend with',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
             const SizedBox(height: 2),
             const SelectableText(
               'uvicorn app.main:app --host 0.0.0.0 --port 8000',
-              style: TextStyle(fontFamily: 'monospace', fontSize: SynchroType.label),
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: SynchroType.label,
+              ),
             ),
             const SizedBox(height: SynchroSpacing.md),
             Text(
               'On an Android emulator the host is 10.0.2.2, not localhost. '
               'Override with --dart-define=SYNCHRO_API=http://<host>:8000.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: SynchroColors.onNavyMuted),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: SynchroColors.onNavyMuted),
             ),
           ],
         ),

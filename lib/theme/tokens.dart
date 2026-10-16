@@ -18,6 +18,7 @@ abstract final class SynchroColors {
   static const Color surface = Color(0xFFFFFFFF);
   static const Color surfaceQuiet = Color(0xFFF6F3EA);
   static const Color hairline = Color(0xFFE2DCC9);
+  static const Color outer = Color(0xFFE6E0D3);
 
   static const Color ok = Color(0xFF1F7A4D);
   static const Color warn = Color(0xFFB4790A);

@@ -30,7 +30,9 @@ class _SynchroAppState extends State<SynchroApp> {
         theme: SynchroTheme.light,
         darkTheme: SynchroTheme.dark,
         themeMode: mode,
-        home: AppFrame(child: SplashScreen(controller: widget.controller)),
+        builder: (context, child) =>
+            AppFrame(child: child ?? const SizedBox.shrink()),
+        home: SplashScreen(controller: widget.controller),
       ),
     );
   }
