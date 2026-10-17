@@ -197,6 +197,17 @@ void main() {
         targetFacultyId: proxy.id,
       );
       expect(swap?.status, 'draft');
+
+      expect(controller.editSession(session.id, facultyId: proxy.id), isTrue);
+      controller.validate();
+      expect(
+        controller.hardConflicts.any(
+          (issue) =>
+              issue.code == 'TEACHER_UNAVAILABLE' &&
+              issue.sessionIds.contains(session.id),
+        ),
+        isFalse,
+      );
     },
   );
 }
