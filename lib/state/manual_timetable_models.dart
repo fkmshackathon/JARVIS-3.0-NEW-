@@ -1,8 +1,7 @@
-/// Immutable data objects used by the local manual timetable prototype.
+/// Immutable data objects used by the local timetable workspace.
 ///
-/// These objects deliberately do not mirror the server wire models. The manual
-/// editor is a small, frontend-only draft surface and must remain useful when
-/// there is no backend connection.
+/// These objects deliberately stay independent from the preserved server wire
+/// models so the local generator and editor share one source of truth.
 library;
 
 enum ManualSessionType {
@@ -240,6 +239,22 @@ class ManualSubject {
   final bool isPractical;
   final int lectureHours;
   final int labHours;
+
+  ManualSubject copyWith({
+    String? id,
+    String? name,
+    String? code,
+    bool? isPractical,
+    int? lectureHours,
+    int? labHours,
+  }) => ManualSubject(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    code: code ?? this.code,
+    isPractical: isPractical ?? this.isPractical,
+    lectureHours: lectureHours ?? this.lectureHours,
+    labHours: labHours ?? this.labHours,
+  );
 }
 
 class ManualBatch {
@@ -256,6 +271,20 @@ class ManualBatch {
   final int year;
   final int size;
   final String department;
+
+  ManualBatch copyWith({
+    String? id,
+    String? name,
+    int? year,
+    int? size,
+    String? department,
+  }) => ManualBatch(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    year: year ?? this.year,
+    size: size ?? this.size,
+    department: department ?? this.department,
+  );
 }
 
 class ManualTimeSlot {
@@ -274,6 +303,20 @@ class ManualTimeSlot {
   final String? label;
 
   String get key => '$day:$startMinute';
+
+  ManualTimeSlot copyWith({
+    int? day,
+    int? startMinute,
+    int? endMinute,
+    bool? isBreak,
+    String? label,
+  }) => ManualTimeSlot(
+    day: day ?? this.day,
+    startMinute: startMinute ?? this.startMinute,
+    endMinute: endMinute ?? this.endMinute,
+    isBreak: isBreak ?? this.isBreak,
+    label: label ?? this.label,
+  );
 }
 
 /// A local issue is intentionally distinct from the server-side [Violation].

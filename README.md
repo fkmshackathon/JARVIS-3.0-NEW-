@@ -1,11 +1,13 @@
 # SYNCHRO / Project Chronos
 
-SYNCHRO is a mobile-first smart-campus timetable workspace. The current product
-flow is intentionally frontend-only: coordinators place, edit, move, delete,
-save, discard, and locally check clearly labelled demo classes without a
-backend, account, solver, or external service. The existing FastAPI solver and
-API client remain in the repository as a preserved compatibility boundary and
-regression surface, but the active SYNCHRO UI does not call them.
+SYNCHRO is a mobile-first smart-campus timetable generator. The active product
+flow is local-first and deterministic: coordinators review college setup,
+faculty loads, batches, subjects, rooms, and teaching requirements; generate a
+schedule; inspect hard conflicts, soft warnings, and unassigned sessions; then
+edit, revalidate, and save a local draft. No account or backend is required.
+The existing FastAPI solver and API client remain in the repository as a
+preserved compatibility boundary and regression surface, but the active UI does
+not call them.
 
 ## Runtime pins
 
@@ -62,21 +64,32 @@ flutter run -d chrome
 The web target is rendered inside a centered phone-sized shell on wide screens
 and uses the available width on real phones.
 
-### Frontend-only demo mode
+### Local generator flow
 
-The app always opens the local workspace without contacting a backend. The
-manual editor uses deterministic sample data labelled
-`DEMO SAMPLE · LOCAL DRAFT ONLY`; browser/device persistence is provided by
-`shared_preferences` and is local-only. The draft supports:
+The app opens with four primary areas:
 
-- manual class creation, editing, moving, deletion, save/discard, and reset;
-- day/week views with batch selection, free slots, and breaks;
-- local teacher, room, and batch conflict detection;
-- faculty workload, room availability, absences, proxy drafts, and swap drafts;
-- an Issues view that separates hard conflicts from soft warnings.
+1. **Overview** — institution/semester summary, setup progress, collection
+   counts, and the honest current timetable state.
+2. **Setup** — working days, a mandatory break, resource collections, and
+   editable subject/batch/faculty teaching requirements.
+3. **Generate & Timetable** — a real pre-generation hand-off followed by the
+   generated day/week timetable and class editor.
+4. **Issues** — hard conflicts, soft warnings, unassigned sessions, and setup
+   problems detected in the current result.
 
-This state is not institutional data. It never pretends to publish, validate on
-a server, or synchronize a local draft with an account or backend.
+The bundled sample data is labelled `DEMO SAMPLE · LOCAL DRAFT ONLY`. The local
+generator expands configured teaching requirements and uses bounded,
+deterministic placement with hard checks for faculty, room, batch, break,
+capacity, room type, closure, and absence constraints. It scores soft
+preferences such as back-to-back teaching, room sharing, and workload balance.
+If resources are insufficient, it returns a partial/infeasible result with the
+affected requirements and an explanation instead of claiming success.
+
+After generation, coordinators can edit, move, reassign, delete, or save a
+class; handle a faculty absence with a proxy or room closure; and revalidate the
+same local timetable. Browser/device persistence is provided by
+`shared_preferences` and is local-only. A generated timetable is never shown
+before the Generate action.
 
 ## Test and quality checks
 
@@ -86,8 +99,8 @@ The single offline test command is:
 make test
 ```
 
-It runs the Flutter widget/API tests and the preserved backend API, solver, and
-validator tests. Individual checks are also available:
+It runs the Flutter generator, controller, widget/API tests and the preserved
+backend API, solver, and validator tests. Individual checks are also available:
 
 ```bash
 flutter analyze
@@ -116,12 +129,14 @@ API URL for its local workflow.
 
 ## Product boundaries
 
-The active frontend exposes local timetable editing, local conflict checks,
-workload, room availability, and reviewable absence/proxy/swap drafts. It does
-not expose real authentication, role authorization, server validation, solver
-generation, publishing, or external synchronization. The backend and API
-client listed below are preserved for compatibility and regression testing,
-not used by the current product flow.
+The active frontend exposes local setup, deterministic timetable generation,
+local conflict checks, workload, room availability, and reviewable
+absence/proxy/swap drafts. It does not expose real authentication, role
+authorization, server validation, publishing, or external synchronization. The
+local generator is intentionally a bounded hackathon-scale search, not a claim
+of university-scale optimization. The backend and API client listed below are
+preserved for compatibility and regression testing, not used by the current
+product flow.
 
 The scheduling implementation is deliberately protected in:
 

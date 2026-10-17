@@ -38,8 +38,15 @@ class ManualIssuesScreen extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         final roomIssues = _roomAvailabilityIssues(controller);
+        final unassigned = controller.hardConflicts
+            .where((issue) => issue.code == 'UNASSIGNED_REQUIREMENT')
+            .toList();
         final hard = controller.hardConflicts
-            .where((issue) => issue.code != 'ROOM_UNAVAILABLE')
+            .where(
+              (issue) =>
+                  issue.code != 'ROOM_UNAVAILABLE' &&
+                  issue.code != 'UNASSIGNED_REQUIREMENT',
+            )
             .toList();
         final soft = controller.softWarnings;
         final proxies = controller.faculty.where((teacher) => teacher.isProxy);
@@ -48,6 +55,7 @@ class ManualIssuesScreen extends StatelessWidget {
             hard.isNotEmpty ||
             soft.isNotEmpty ||
             roomIssues.isNotEmpty ||
+            unassigned.isNotEmpty ||
             proxies.isNotEmpty ||
             swaps.isNotEmpty;
 
@@ -64,7 +72,13 @@ class ManualIssuesScreen extends StatelessWidget {
               const SizedBox(height: SynchroSpacing.md),
               _LocalDraftBanner(controller: controller),
               const SizedBox(height: SynchroSpacing.lg),
-              if (!hasIssues)
+              if (!controller.hasGeneratedTimetable)
+                const EmptyState(
+                  title: 'No timetable generated yet',
+                  body: 'Generate a timetable from the current setup to see hard conflicts, soft warnings, unassigned sessions, and setup issues here.',
+                  icon: Icons.calendar_view_day_outlined,
+                )
+              else if (!hasIssues)
                 const EmptyState(
                   title: 'No local issues',
                   body: 'The manual draft currently has no hard conflicts, soft warnings, room closures, or pending proxy/swap items.',
@@ -80,6 +94,28 @@ class ManualIssuesScreen extends StatelessWidget {
                     count: hard.length,
                     children: [
                       for (final issue in hard)
+                        _IssueRow(
+                          issue: issue,
+                          controller: controller,
+                          onInspect: () => _inspectIssue(context, issue),
+                          onAction: () => _actionIssue(context, issue),
+                        ),
+                    ],
+                  ),
+                  if (soft.isNotEmpty ||
+                      roomIssues.isNotEmpty ||
+                      unassigned.isNotEmpty)
+                    const SizedBox(height: SynchroSpacing.lg),
+                ],
+                if (unassigned.isNotEmpty) ...[
+                  _IssueSection(
+                    title: 'Unassigned sessions',
+                    overline: 'Could not fit in the current setup',
+                    tone: Tone.warn,
+                    icon: Icons.event_busy_outlined,
+                    count: unassigned.length,
+                    children: [
+                      for (final issue in unassigned)
                         _IssueRow(
                           issue: issue,
                           controller: controller,
@@ -211,10 +247,10 @@ class _IssuesHeader extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text('Manual issues', style: Theme.of(context).textTheme.headlineSmall),
+      Text('Issues', style: Theme.of(context).textTheme.headlineSmall),
       const SizedBox(height: SynchroSpacing.xs),
       Text(
-        'Triage only what is present in the local timetable draft.',
+        'Review only issues detected in the current local timetable.',
         style: Theme.of(context).textTheme.bodySmall,
       ),
     ],
@@ -247,13 +283,17 @@ class _LocalDraftBanner extends StatelessWidget {
         const SizedBox(width: SynchroSpacing.sm),
         Expanded(
           child: Text(
-            controller.dataLabel,
+            controller.hasGeneratedTimetable
+                ? controller.dataLabel
+                : 'NO TIMETABLE GENERATED',
             style: Theme.of(context).textTheme.labelSmall
                 ?.copyWith(color: SynchroColors.navyDeep),
           ),
         ),
         Text(
-          controller.hasLocalValidation
+          !controller.hasGeneratedTimetable
+              ? 'Not generated'
+              : controller.hasLocalValidation
               ? 'Locally checked'
               : controller.hasUnsavedChanges
               ? 'Draft'

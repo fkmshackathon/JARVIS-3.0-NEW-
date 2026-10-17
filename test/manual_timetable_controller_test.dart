@@ -5,98 +5,106 @@ import 'package:synchro/state/manual_timetable_controller.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('workspace starts empty and generates from configured requirements', () {
+    final controller = ManualTimetableController();
+
+    expect(controller.sessions, isEmpty);
+    expect(controller.hasGeneratedTimetable, isFalse);
+    expect(controller.requirements, isNotEmpty);
+
+    final result = controller.generateTimetable();
+
+    expect(result.isSuccess, isTrue, reason: result.message);
+    expect(result.generatedSessions, isNotEmpty);
+    expect(result.unassignedRequirements, isEmpty, reason: result.message);
+    expect(result.hardIssues, isEmpty);
+    expect(controller.hasGeneratedTimetable, isTrue);
+    expect(controller.sessions.length, result.generatedSessions.length);
+  });
+
   test(
-    'manual draft supports add, edit, move, delete and save/discard',
-    () async {
+    'manual edit invalidates the latest validation and can be discarded',
+    () {
       final controller = ManualTimetableController();
-      final originalCount = controller.sessions.length;
-      final first = controller.sessions.first;
+      controller.generateTimetable();
+      final original = controller.sessions.first;
+      final moved = original.copyWith(day: 5, startMinute: 900, endMinute: 950);
 
-      final added = controller.addSession(
-        ManualSession(
-          id: '',
-          subjectId: controller.subjects.first.id,
-          facultyId: controller.faculty.first.id,
-          batchId: controller.batches.first.id,
-          roomId: controller.rooms.first.id,
-          day: 5,
-          startMinute: 900,
-          endMinute: 960,
-        ),
-      );
-      expect(controller.sessions.length, originalCount + 1);
+      expect(controller.editSession(moved), isTrue);
       expect(controller.hasUnsavedChanges, isTrue);
+      expect(controller.hasLocalValidation, isFalse);
+      expect(controller.sessionById(original.id)?.day, 5);
 
-      expect(
-        controller.editSession(added.id, note: 'Moved for seminar'),
-        isTrue,
-      );
-      expect(
-        controller.moveSession(
-          added.id,
-          day: 4,
-          startMinute: 960,
-          endMinute: 1020,
-        ),
-        isTrue,
-      );
-      expect(controller.sessionById(added.id)?.day, 4);
+      expect(controller.validate(), isEmpty);
+      expect(controller.hasLocalValidation, isTrue);
 
-      await controller.saveDraft();
-      expect(controller.hasUnsavedChanges, isFalse);
-      expect(controller.deleteSession(first.id), isTrue);
-      expect(controller.hasUnsavedChanges, isTrue);
       controller.discardDraft();
-      expect(controller.sessionById(first.id), isNotNull);
-      expect(controller.sessionById(added.id), isNotNull);
+      expect(controller.sessionById(original.id)?.day, original.day);
     },
   );
 
-  test('a saved local draft restores into a new controller', () async {
+  test('local save and restore preserve the generated timetable', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final source = ManualTimetableController();
-    source.loadConflictDemo();
-    source.editSession(
-      source.sessions.first.copyWith(note: 'Persisted local note'),
-    );
-
+    source.generateTimetable();
+    final edited = source.sessions.first.copyWith(note: 'Moved for seminar');
+    source.editSession(edited);
+    source.validate();
     await source.saveDraft();
 
     final restored = ManualTimetableController();
     await restored.restoreDraft();
 
-    expect(restored.dataLabel, ManualTimetableController.conflictScenarioLabel);
+    expect(restored.hasGeneratedTimetable, isTrue);
     expect(restored.sessions.length, source.sessions.length);
-    expect(
-      restored.sessions
-          .firstWhere((session) => session.id == source.sessions.first.id)
-          .note,
-      'Persisted local note',
-    );
-    expect(restored.hasUnsavedChanges, isFalse);
+    expect(restored.sessionById(edited.id)?.note, 'Moved for seminar');
     expect(restored.isRestoring, isFalse);
   });
 
-  test('malformed local storage leaves the clean demo usable', () async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'synchro.manual-draft.v1': '{not valid json',
-    });
-    final controller = ManualTimetableController();
+  test(
+    'malformed local storage leaves the clean ungenerated workspace usable',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'synchro.workspace.v2': '{not valid json',
+      });
+      final controller = ManualTimetableController();
 
-    await controller.restoreDraft();
+      await controller.restoreDraft();
 
-    expect(controller.sessions, isNotEmpty);
-    expect(controller.dataLabel, ManualTimetableController.sampleDataLabel);
-    expect(controller.hasUnsavedChanges, isFalse);
-    expect(controller.isRestoring, isFalse);
-  });
+      expect(controller.sessions, isEmpty);
+      expect(controller.requirements, isNotEmpty);
+      expect(controller.hasGeneratedTimetable, isFalse);
+      expect(controller.isRestoring, isFalse);
+    },
+  );
 
-  test('manual validation detects teacher, room and batch overlap', () {
-    final controller = ManualTimetableController();
-    final base = controller.sessions.first;
-    final overlapping = base.copyWith(id: 'overlap');
+  test('validation detects teacher, room, and batch interval overlaps', () {
+    final controller = ManualTimetableController(
+      sessions: const <ManualSession>[
+        ManualSession(
+          id: 'first',
+          subjectId: 'subject-mathematics',
+          facultyId: 'faculty-kavita',
+          batchId: 'batch-fy-it-a',
+          roomId: 'room-cr-101',
+          day: 0,
+          startMinute: 540,
+          endMinute: 600,
+        ),
+        ManualSession(
+          id: 'second',
+          subjectId: 'subject-mathematics',
+          facultyId: 'faculty-kavita',
+          batchId: 'batch-fy-it-a',
+          roomId: 'room-cr-101',
+          day: 0,
+          startMinute: 590,
+          endMinute: 650,
+        ),
+      ],
+    );
 
-    controller.addSession(overlapping);
+    controller.validate();
 
     expect(
       controller.hardConflicts.any((issue) => issue.code == 'TEACHER_OVERLAP'),
@@ -112,89 +120,83 @@ void main() {
     );
   });
 
+  test('adjacent sessions are not reported as overlaps', () {
+    final controller = ManualTimetableController(
+      sessions: const <ManualSession>[
+        ManualSession(
+          id: 'first',
+          subjectId: 'subject-mathematics',
+          facultyId: 'faculty-kavita',
+          batchId: 'batch-fy-it-a',
+          roomId: 'room-cr-101',
+          day: 0,
+          startMinute: 540,
+          endMinute: 590,
+        ),
+        ManualSession(
+          id: 'second',
+          subjectId: 'subject-mathematics',
+          facultyId: 'faculty-kavita',
+          batchId: 'batch-fy-it-a',
+          roomId: 'room-cr-101',
+          day: 0,
+          startMinute: 590,
+          endMinute: 640,
+        ),
+      ],
+    );
+
+    controller.validate();
+
+    expect(
+      controller.hardConflicts.where((issue) => issue.code.endsWith('OVERLAP')),
+      isEmpty,
+    );
+  });
+
   test(
-    'workload and available room calculations use current draft sessions',
+    'workload, room availability, absence, proxy, and swap remain local',
     () {
       final controller = ManualTimetableController();
+      controller.generateTimetable();
       final teacher = controller.faculty.first;
-      final workloadBefore = controller.workloadHoursFor(teacher.id);
-      expect(workloadBefore, greaterThan(0));
-
-      final roomChoices = controller.availableRoomsFor(
-        day: 5,
-        startMinute: 900,
-        endMinute: 960,
+      final session = controller.sessions.firstWhere(
+        (item) => item.facultyId == teacher.id,
       );
-      expect(roomChoices, isNotEmpty);
 
-      final room = roomChoices.first;
-      controller.markRoomUnavailable(
-        room.id,
-        day: 5,
-        startMinute: 900,
-        endMinute: 960,
-        reason: 'Construction',
-      );
+      expect(controller.workloadHoursFor(teacher.id), greaterThan(0));
       expect(
         controller
-            .availableRoomsFor(day: 5, startMinute: 900, endMinute: 960)
-            .any((candidate) => candidate.id == room.id),
-        isFalse,
-      );
-
-      final addedFaculty = ManualFaculty(
-        id: 'faculty-demo-new',
-        name: 'Demo Faculty',
-        department: 'Information Technology',
-        maxWeeklyHours: 12,
-      );
-      expect(controller.addFaculty(addedFaculty), isTrue);
-      expect(
-        controller.editFaculty(addedFaculty.copyWith(name: 'Updated Faculty')),
+            .availableRoomsFor(
+              day: session.day,
+              startMinute: session.startMinute,
+              endMinute: session.endMinute,
+              excludeSessionId: session.id,
+            )
+            .any((room) => room.id == session.roomId),
         isTrue,
       );
+
+      controller.handleAbsence(
+        teacher.id,
+        day: session.day,
+        startMinute: session.startMinute,
+        endMinute: session.endMinute,
+      );
       expect(
-        controller.facultyById('faculty-demo-new')?.name,
-        'Updated Faculty',
+        controller.hardConflicts.any(
+          (issue) => issue.code == 'TEACHER_UNAVAILABLE',
+        ),
+        isTrue,
       );
 
-      final addedRoom = ManualRoom(
-        id: 'room-demo-new',
-        name: 'CR-Demo',
-        kind: 'classroom',
-        capacity: 45,
-        department: 'Information Technology',
+      final proxy = controller.createProxy(teacher.id);
+      expect(proxy.isProxy, isTrue);
+      final swap = controller.requestSwap(
+        session.id,
+        targetFacultyId: proxy.id,
       );
-      expect(controller.addRoom(addedRoom), isTrue);
-      expect(controller.editRoom(addedRoom.copyWith(capacity: 50)), isTrue);
-      expect(controller.roomById('room-demo-new')?.capacity, 50);
+      expect(swap?.status, 'draft');
     },
   );
-
-  test('absence, proxy and swap workflows remain local and reviewable', () {
-    final controller = ManualTimetableController();
-    final teacher = controller.faculty.first;
-    final session = controller.sessions.firstWhere(
-      (item) => item.facultyId == teacher.id,
-    );
-
-    controller.handleAbsence(
-      teacher.id,
-      day: session.day,
-      startMinute: session.startMinute,
-      endMinute: session.endMinute,
-    );
-    expect(
-      controller.hardConflicts.any(
-        (issue) => issue.code == 'TEACHER_UNAVAILABLE',
-      ),
-      isTrue,
-    );
-
-    final proxy = controller.createProxy(teacher.id);
-    expect(proxy.isProxy, isTrue);
-    final swap = controller.requestSwap(session.id, targetFacultyId: proxy.id);
-    expect(swap?.status, 'draft');
-    expect(controller.swapRequests, hasLength(1));
-  });
 }

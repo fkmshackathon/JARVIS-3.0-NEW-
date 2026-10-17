@@ -3,18 +3,23 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'manual_timetable_models.dart';
+import 'timetable_generator.dart';
 
 export 'manual_timetable_models.dart';
+export 'timetable_generator.dart';
 
-/// Owns the local, frontend-only draft used by the manual timetable editor.
+/// Owns the local timetable workspace used by setup, generation, editing, and
+/// issue review.
 ///
-/// This controller intentionally has no API client. It is a deterministic
-/// product prototype: a coordinator can try edits, inspect local hard conflicts
-/// and soft warnings, then save or discard a local draft. Persistence is limited
-/// to the device/browser through shared_preferences; it is not institutional data.
+/// This controller intentionally has no API client. It is a deterministic local
+/// prototype: a coordinator configures teaching requirements, generates a
+/// timetable, inspects local hard conflicts and soft warnings, then edits or
+/// saves a draft. Persistence is limited to the device/browser.
 class ManualTimetableController extends ChangeNotifier {
-  static const String _storageKey = 'synchro.manual-draft.v1';
+  static const String _storageKey = 'synchro.workspace.v2';
+
+  static const String defaultInstitution = 'Northstar Institute of Technology';
+  static const String defaultSemester = 'Semester 2 · 2026';
 
   ManualTimetableController({
     List<ManualSession>? sessions,
@@ -36,6 +41,24 @@ class ManualTimetableController extends ChangeNotifier {
     _savedFaculty = List<ManualFaculty>.from(_faculty);
     _savedRooms = List<ManualRoom>.from(_rooms);
     _savedSwapRequests = const <ManualSwapRequest>[];
+    _savedSubjects = List<ManualSubject>.from(_subjects);
+    _savedBatches = List<ManualBatch>.from(_batches);
+    _savedRequirements = List<TimetableTeachingRequirement>.from(_requirements);
+    _savedInstitutionName = _institutionName;
+    _savedSemesterLabel = _semesterLabel;
+    _savedWorkingDays = Set<int>.from(_workingDays);
+    _savedBreakStart = _breakStart;
+    _savedBreakEnd = _breakEnd;
+    _savedBreakLabel = _breakLabel;
+    _savedInstitutionName = _institutionName;
+    _savedSemesterLabel = _semesterLabel;
+    _savedWorkingDays = Set<int>.from(_workingDays);
+    _savedBreakStart = _breakStart;
+    _savedBreakEnd = _breakEnd;
+    _savedBreakLabel = _breakLabel;
+    _savedGenerationResult = _generationResult;
+    _savedGenerationStatus = _generationStatus;
+    _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
     _refreshIssues();
   }
 
@@ -59,11 +82,20 @@ class ManualTimetableController extends ChangeNotifier {
   List<ManualIssue> _hardConflicts = <ManualIssue>[];
   List<ManualIssue> _softWarnings = <ManualIssue>[];
   List<ManualSwapRequest> _swapRequests = <ManualSwapRequest>[];
+  List<TimetableTeachingRequirement> _requirements =
+      <TimetableTeachingRequirement>[];
 
   List<ManualSession> _savedSessions = <ManualSession>[];
   List<ManualFaculty> _savedFaculty = <ManualFaculty>[];
   List<ManualRoom> _savedRooms = <ManualRoom>[];
   List<ManualSwapRequest> _savedSwapRequests = <ManualSwapRequest>[];
+  List<ManualSubject> _savedSubjects = <ManualSubject>[];
+  List<ManualBatch> _savedBatches = <ManualBatch>[];
+  List<TimetableTeachingRequirement> _savedRequirements =
+      <TimetableTeachingRequirement>[];
+  TimetableGenerationResult? _savedGenerationResult;
+  TimetableGenerationStatus? _savedGenerationStatus;
+  List<ManualIssue> _savedGenerationIssues = <ManualIssue>[];
 
   String _selectedBatchId = '';
   int _selectedDay = 0;
@@ -73,6 +105,22 @@ class ManualTimetableController extends ChangeNotifier {
   bool _isRestoring = false;
   String _scenarioLabel = sampleDataLabel;
   String _savedScenarioLabel = sampleDataLabel;
+  String _institutionName = defaultInstitution;
+  String _semesterLabel = defaultSemester;
+  Set<int> _workingDays = <int>{0, 1, 2, 3, 4, 5};
+  int _breakStart = 720;
+  int _breakEnd = 750;
+  String _breakLabel = 'Lunch break';
+  String _savedInstitutionName = defaultInstitution;
+  String _savedSemesterLabel = defaultSemester;
+  Set<int> _savedWorkingDays = <int>{0, 1, 2, 3, 4, 5};
+  int _savedBreakStart = 720;
+  int _savedBreakEnd = 750;
+  String _savedBreakLabel = 'Lunch break';
+  TimetableGenerationResult? _generationResult;
+  TimetableGenerationStatus? _generationStatus;
+  List<ManualIssue> _generationIssues = <ManualIssue>[];
+  bool _isGenerating = false;
   int _nextSessionNumber = 100;
   int _nextSwapNumber = 1;
 
@@ -89,6 +137,32 @@ class ManualTimetableController extends ChangeNotifier {
   bool get hasLocalValidation => _hasLocalValidation;
   bool get isRestoring => _isRestoring;
   String get dataLabel => _scenarioLabel;
+  String get institutionName => _institutionName;
+  String get semesterLabel => _semesterLabel;
+  List<int> get workingDays =>
+      List<int>.unmodifiable((_workingDays.toList()..sort()));
+  int get breakStart => _breakStart;
+  int get breakEnd => _breakEnd;
+  String get breakLabel => _breakLabel;
+  List<TimetableTeachingRequirement> get requirements =>
+      List<TimetableTeachingRequirement>.unmodifiable(_requirements);
+  TimetableGenerationResult? get generationResult => _generationResult;
+  TimetableGenerationStatus? get generationStatus => _generationStatus;
+  bool get isGenerating => _isGenerating;
+  bool get hasGeneratedTimetable => _generationResult != null;
+  List<TimetableUnassignedRequirement> get unassignedRequirements =>
+      _generationResult?.unassignedRequirements ??
+      const <TimetableUnassignedRequirement>[];
+  bool get canGenerate =>
+      _institutionName.trim().isNotEmpty &&
+      _semesterLabel.trim().isNotEmpty &&
+      _workingDays.isNotEmpty &&
+      _breakEnd - _breakStart >= 30 &&
+      _faculty.isNotEmpty &&
+      _rooms.isNotEmpty &&
+      _batches.isNotEmpty &&
+      _subjects.isNotEmpty &&
+      _requirements.isNotEmpty;
 
   List<ManualSession> get sessions =>
       List<ManualSession>.unmodifiable(_sessions);
@@ -177,6 +251,105 @@ class ManualTimetableController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Updates the term configuration used by the local generator. Slots are
+  /// rebuilt from the selected days and break, so setup changes affect the next
+  /// generation attempt rather than only changing a label in the UI.
+  void updateSetup({
+    String? institution,
+    String? semester,
+    Iterable<int>? workingDays,
+    int? breakStart,
+    int? breakEnd,
+    String? breakLabel,
+  }) {
+    final nextDays = workingDays == null
+        ? _workingDays
+        : workingDays.where((day) => day >= 0 && day < dayNames.length).toSet();
+    final nextStart = breakStart ?? _breakStart;
+    final nextEnd = breakEnd ?? _breakEnd;
+    if (nextEnd <= nextStart) return;
+    final changed =
+        (institution != null && institution.trim() != _institutionName) ||
+        (semester != null && semester.trim() != _semesterLabel) ||
+        nextDays.length != _workingDays.length ||
+        !nextDays.containsAll(_workingDays) ||
+        !_workingDays.containsAll(nextDays) ||
+        nextStart != _breakStart ||
+        nextEnd != _breakEnd ||
+        (breakLabel != null && breakLabel.trim() != _breakLabel);
+    if (!changed) return;
+    _institutionName = institution?.trim().isNotEmpty == true
+        ? institution!.trim()
+        : _institutionName;
+    _semesterLabel = semester?.trim().isNotEmpty == true
+        ? semester!.trim()
+        : _semesterLabel;
+    _workingDays = nextDays;
+    _breakStart = nextStart;
+    _breakEnd = nextEnd;
+    _breakLabel = breakLabel?.trim().isNotEmpty == true
+        ? breakLabel!.trim()
+        : _breakLabel;
+    _rebuildTimeSlots();
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+  }
+
+  void setRequirements(List<TimetableTeachingRequirement> requirements) {
+    _requirements = List<TimetableTeachingRequirement>.from(requirements);
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+  }
+
+  bool editRequirement(TimetableTeachingRequirement requirement) {
+    final index = _requirements.indexWhere(
+      (item) => item.stableId == requirement.stableId,
+    );
+    if (index < 0) return false;
+    _requirements[index] = requirement;
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+    return true;
+  }
+
+  bool addSubject(ManualSubject subject) {
+    if (subject.id.trim().isEmpty ||
+        _subjects.any((item) => item.id == subject.id)) {
+      return false;
+    }
+    _subjects.add(subject);
+    _touchDraft();
+    return true;
+  }
+
+  bool editSubject(ManualSubject subject) {
+    final index = _subjects.indexWhere((item) => item.id == subject.id);
+    if (index < 0) return false;
+    _subjects[index] = subject;
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+    return true;
+  }
+
+  bool addBatch(ManualBatch batch) {
+    if (batch.id.trim().isEmpty ||
+        _batches.any((item) => item.id == batch.id)) {
+      return false;
+    }
+    _batches.add(batch);
+    _touchDraft();
+    return true;
+  }
+
+  bool editBatch(ManualBatch batch) {
+    final index = _batches.indexWhere((item) => item.id == batch.id);
+    if (index < 0) return false;
+    _batches[index] = batch;
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+    return true;
+  }
+
   /// Restores the last locally saved draft. Malformed or outdated storage is
   /// ignored so the clean demo remains available.
   Future<void> restoreDraft() async {
@@ -192,21 +365,42 @@ class ManualTimetableController extends ChangeNotifier {
       final sessions = _decodeSessions(map['sessions']);
       final faculty = _decodeFaculty(map['faculty']);
       final rooms = _decodeRooms(map['rooms']);
+      final subjects = _decodeSubjects(map['subjects']);
+      final batches = _decodeBatches(map['batches']);
+      final requirements = _decodeRequirements(map['requirements']);
       final swaps = _decodeSwaps(map['swaps']);
       if (sessions == null ||
           faculty == null ||
           rooms == null ||
+          subjects == null ||
+          batches == null ||
+          requirements == null ||
           swaps == null) {
         return;
       }
-      _sessions = sessions;
+      _sessions = map['generated'] == true ? sessions : <ManualSession>[];
       _faculty = faculty;
       _rooms = rooms;
+      _subjects = subjects;
+      _batches = batches;
+      _requirements = requirements;
       _swapRequests = swaps;
       _savedSessions = List<ManualSession>.from(_sessions);
       _savedFaculty = List<ManualFaculty>.from(_faculty);
       _savedRooms = List<ManualRoom>.from(_rooms);
       _savedSwapRequests = List<ManualSwapRequest>.from(_swapRequests);
+      _savedSubjects = List<ManualSubject>.from(_subjects);
+      _savedBatches = List<ManualBatch>.from(_batches);
+      _savedRequirements = List<TimetableTeachingRequirement>.from(
+        _requirements,
+      );
+      _institutionName = map['institution'] as String? ?? defaultInstitution;
+      _semesterLabel = map['semester'] as String? ?? defaultSemester;
+      _workingDays = _decodeWorkingDays(map['working_days']);
+      _breakStart = _intOr(map['break_start'], 720);
+      _breakEnd = _intOr(map['break_end'], 750);
+      _breakLabel = map['break_label'] as String? ?? 'Lunch break';
+      _rebuildTimeSlots();
       _selectedBatchId =
           _batches.any((batch) => batch.id == map['selected_batch_id'])
           ? map['selected_batch_id'] as String
@@ -219,7 +413,37 @@ class ManualTimetableController extends ChangeNotifier {
       _scenarioLabel = map['scenario_label'] as String? ?? sampleDataLabel;
       _savedScenarioLabel = _scenarioLabel;
       _hasUnsavedChanges = false;
-      _hasLocalValidation = false;
+      _hasLocalValidation = map['has_local_validation'] as bool? ?? false;
+      _generationStatus = _decodeGenerationStatus(map['generation_status']);
+      _generationIssues = _decodeIssues(map['generation_issues']);
+      if (map['generated'] == true && _sessions.isNotEmpty) {
+        _generationResult = TimetableGenerationResult(
+          id: map['generation_id'] as String? ?? 'restored-local-result',
+          status: _generationStatus ?? TimetableGenerationStatus.generated,
+          message:
+              map['generation_message'] as String? ??
+              'Restored local timetable draft.',
+          generatedSessions: _sessions,
+          unassignedRequirements: _decodeUnassigned(
+            map['unassigned_requirements'],
+          ),
+          validationIssues: _generationIssues,
+          score: _intOr(map['generation_score'], 0),
+          searchNodes: _intOr(map['generation_nodes'], 0),
+        );
+      } else {
+        _generationResult = null;
+        _generationStatus = null;
+      }
+      _savedInstitutionName = _institutionName;
+      _savedSemesterLabel = _semesterLabel;
+      _savedWorkingDays = Set<int>.from(_workingDays);
+      _savedBreakStart = _breakStart;
+      _savedBreakEnd = _breakEnd;
+      _savedBreakLabel = _breakLabel;
+      _savedGenerationResult = _generationResult;
+      _savedGenerationStatus = _generationStatus;
+      _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
       _refreshIssues();
     } catch (_) {
       // A broken local payload must never prevent the app from opening.
@@ -227,6 +451,69 @@ class ManualTimetableController extends ChangeNotifier {
       _isRestoring = false;
       notifyListeners();
     }
+  }
+
+  /// Runs the deterministic local scheduler against the current setup data.
+  /// The method is synchronous because the bounded prototype search is local;
+  /// callers can still show [isGenerating] around it for a truthful status.
+  TimetableGenerationResult generateTimetable() {
+    _isGenerating = true;
+    _generationStatus = null;
+    notifyListeners();
+    final result = TimetableGenerator().generate(
+      TimetableGenerationInput(
+        faculty: _faculty,
+        rooms: _rooms,
+        batches: _batches,
+        subjects: _subjects,
+        timeSlots: _timeSlots,
+        requirements: _requirements,
+      ),
+    );
+    _generationResult = result;
+    _generationStatus = result.status;
+    _generationIssues = result.validationIssues
+        .where(
+          (issue) =>
+              issue.code != 'BACK_TO_BACK_TEACHING' &&
+              issue.code != 'WORKLOAD_BALANCE',
+        )
+        .toList();
+    _sessions = List<ManualSession>.from(result.generatedSessions);
+    _savedSessions = List<ManualSession>.from(_sessions);
+    _savedFaculty = List<ManualFaculty>.from(_faculty);
+    _savedRooms = List<ManualRoom>.from(_rooms);
+    _savedSubjects = List<ManualSubject>.from(_subjects);
+    _savedBatches = List<ManualBatch>.from(_batches);
+    _savedRequirements = List<TimetableTeachingRequirement>.from(_requirements);
+    _savedSwapRequests = List<ManualSwapRequest>.from(_swapRequests);
+    _savedInstitutionName = _institutionName;
+    _savedSemesterLabel = _semesterLabel;
+    _savedWorkingDays = Set<int>.from(_workingDays);
+    _savedBreakStart = _breakStart;
+    _savedBreakEnd = _breakEnd;
+    _savedBreakLabel = _breakLabel;
+    _savedGenerationResult = _generationResult;
+    _savedGenerationStatus = _generationStatus;
+    _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
+    _hasUnsavedChanges = true;
+    _hasLocalValidation = true;
+    _isGenerating = false;
+    _refreshIssues();
+    notifyListeners();
+    return result;
+  }
+
+  /// Alias used by the main generation screen and tests.
+  TimetableGenerationResult generate() => generateTimetable();
+
+  void clearGeneratedTimetable() {
+    _sessions = <ManualSession>[];
+    _generationResult = null;
+    _generationStatus = null;
+    _generationIssues = <ManualIssue>[];
+    _hasLocalValidation = false;
+    _touchDraft();
   }
 
   /// Adds a class to the draft and immediately re-runs local validation.
@@ -356,7 +643,19 @@ class ManualTimetableController extends ChangeNotifier {
     _savedFaculty = List<ManualFaculty>.from(_faculty);
     _savedRooms = List<ManualRoom>.from(_rooms);
     _savedSwapRequests = List<ManualSwapRequest>.from(_swapRequests);
+    _savedSubjects = List<ManualSubject>.from(_subjects);
+    _savedBatches = List<ManualBatch>.from(_batches);
+    _savedRequirements = List<TimetableTeachingRequirement>.from(_requirements);
     _savedScenarioLabel = _scenarioLabel;
+    _savedInstitutionName = _institutionName;
+    _savedSemesterLabel = _semesterLabel;
+    _savedWorkingDays = Set<int>.from(_workingDays);
+    _savedBreakStart = _breakStart;
+    _savedBreakEnd = _breakEnd;
+    _savedBreakLabel = _breakLabel;
+    _savedGenerationResult = _generationResult;
+    _savedGenerationStatus = _generationStatus;
+    _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
     _hasUnsavedChanges = false;
     notifyListeners();
     try {
@@ -372,9 +671,22 @@ class ManualTimetableController extends ChangeNotifier {
     _faculty = List<ManualFaculty>.from(_savedFaculty);
     _rooms = List<ManualRoom>.from(_savedRooms);
     _swapRequests = List<ManualSwapRequest>.from(_savedSwapRequests);
+    _subjects = List<ManualSubject>.from(_savedSubjects);
+    _batches = List<ManualBatch>.from(_savedBatches);
+    _requirements = List<TimetableTeachingRequirement>.from(_savedRequirements);
+    _institutionName = _savedInstitutionName;
+    _semesterLabel = _savedSemesterLabel;
+    _workingDays = Set<int>.from(_savedWorkingDays);
+    _breakStart = _savedBreakStart;
+    _breakEnd = _savedBreakEnd;
+    _breakLabel = _savedBreakLabel;
+    _rebuildTimeSlots();
     _scenarioLabel = _savedScenarioLabel;
     _hasUnsavedChanges = false;
     _hasLocalValidation = false;
+    _generationResult = _savedGenerationResult;
+    _generationStatus = _savedGenerationStatus;
+    _generationIssues = List<ManualIssue>.from(_savedGenerationIssues);
     _refreshIssues();
     notifyListeners();
   }
@@ -392,10 +704,25 @@ class ManualTimetableController extends ChangeNotifier {
     _savedRooms = List<ManualRoom>.from(_rooms);
     _swapRequests = <ManualSwapRequest>[];
     _savedSwapRequests = <ManualSwapRequest>[];
+    _savedSubjects = List<ManualSubject>.from(_subjects);
+    _savedBatches = List<ManualBatch>.from(_batches);
+    _savedRequirements = List<TimetableTeachingRequirement>.from(_requirements);
+    _savedInstitutionName = _institutionName;
+    _savedSemesterLabel = _semesterLabel;
+    _savedWorkingDays = Set<int>.from(_workingDays);
+    _savedBreakStart = _breakStart;
+    _savedBreakEnd = _breakEnd;
+    _savedBreakLabel = _breakLabel;
+    _savedGenerationResult = null;
+    _savedGenerationStatus = null;
+    _savedGenerationIssues = <ManualIssue>[];
     _hasUnsavedChanges = false;
     _hasLocalValidation = false;
     _scenarioLabel = sampleDataLabel;
     _savedScenarioLabel = sampleDataLabel;
+    _generationResult = null;
+    _generationStatus = null;
+    _generationIssues = <ManualIssue>[];
     _refreshIssues();
     notifyListeners();
     try {
@@ -411,15 +738,40 @@ class ManualTimetableController extends ChangeNotifier {
   void loadConflictDemo() {
     _seedDemoData();
     _scenarioLabel = conflictScenarioLabel;
-    final base = _sessions.first;
+    final base = ManualSession(
+      id: 'demo-conflict-base',
+      subjectId: _subjects.first.id,
+      facultyId: _faculty.first.id,
+      batchId: _batches.first.id,
+      roomId: _rooms.first.id,
+      day: workingDays.first,
+      startMinute: 540,
+      endMinute: 590,
+    );
+    _sessions = <ManualSession>[base];
     _sessions.add(base.copyWith(id: 'demo-conflict-overlap'));
     _sessions.add(base.copyWith(id: 'demo-conflict-missing-room', roomId: ''));
     _selectedBatchId = _batches.first.id;
     _selectedDay = 0;
     _showWeek = false;
     _hasUnsavedChanges = true;
-    _hasLocalValidation = false;
+    _hasLocalValidation = true;
     _refreshIssues();
+    _generationIssues = List<ManualIssue>.from(<ManualIssue>[
+      ..._hardConflicts,
+      ..._softWarnings,
+    ]);
+    _generationStatus = TimetableGenerationStatus.infeasible;
+    _generationResult = TimetableGenerationResult(
+      id: 'conflict-demo',
+      status: TimetableGenerationStatus.infeasible,
+      message: 'Conflict scenario loaded for local issue review.',
+      generatedSessions: _sessions,
+      unassignedRequirements: const <TimetableUnassignedRequirement>[],
+      validationIssues: _generationIssues,
+      score: 0,
+      searchNodes: 0,
+    );
     notifyListeners();
   }
 
@@ -660,14 +1012,36 @@ class ManualTimetableController extends ChangeNotifier {
   }
 
   Map<String, dynamic> _draftMap() => <String, dynamic>{
-    'version': 1,
+    'version': 2,
+    'institution': _institutionName,
+    'semester': _semesterLabel,
+    'working_days': _workingDays.toList()..sort(),
+    'break_start': _breakStart,
+    'break_end': _breakEnd,
+    'break_label': _breakLabel,
     'scenario_label': _scenarioLabel,
+    'generated': _generationResult != null,
+    'has_local_validation': _hasLocalValidation,
+    'generation_id': _generationResult?.id,
+    'generation_status': _generationStatus?.name,
+    'generation_message': _generationResult?.message,
+    'generation_score': _generationResult?.score,
+    'generation_nodes': _generationResult?.searchNodes,
     'selected_batch_id': _selectedBatchId,
     'selected_day': _selectedDay,
     'show_week': _showWeek,
     'sessions': _sessions.map(_sessionMap).toList(),
     'faculty': _faculty.map(_facultyMap).toList(),
     'rooms': _rooms.map(_roomMap).toList(),
+    'subjects': _subjects.map(_subjectMap).toList(),
+    'batches': _batches.map(_batchMap).toList(),
+    'requirements': _requirements.map(_requirementMap).toList(),
+    'generation_issues': _generationIssues.map(_issueMap).toList(),
+    'unassigned_requirements':
+        (_generationResult?.unassignedRequirements ??
+                const <TimetableUnassignedRequirement>[])
+            .map(_unassignedMap)
+            .toList(),
     'swaps': _swapRequests.map(_swapMap).toList(),
   };
 
@@ -733,6 +1107,67 @@ class ManualTimetableController extends ChangeNotifier {
         'note': request.note,
         'status': request.status,
       };
+
+  static Map<String, dynamic> _subjectMap(ManualSubject subject) =>
+      <String, dynamic>{
+        'id': subject.id,
+        'name': subject.name,
+        'code': subject.code,
+        'is_practical': subject.isPractical,
+        'lecture_hours': subject.lectureHours,
+        'lab_hours': subject.labHours,
+      };
+
+  static Map<String, dynamic> _batchMap(ManualBatch batch) => <String, dynamic>{
+    'id': batch.id,
+    'name': batch.name,
+    'year': batch.year,
+    'size': batch.size,
+    'department': batch.department,
+  };
+
+  static Map<String, dynamic> _requirementMap(
+    TimetableTeachingRequirement requirement,
+  ) => <String, dynamic>{
+    'id': requirement.id,
+    'subject_id': requirement.subjectId,
+    'batch_id': requirement.batchId,
+    'faculty_id': requirement.facultyId,
+    'lecture_hours': requirement.lectureHours,
+    'lab_hours': requirement.labHours,
+    'lecture_sessions': requirement.lectureSessions,
+    'lab_sessions': requirement.labSessions,
+    'is_practical': requirement.isPractical,
+    'practical': requirement.practical,
+    'session_duration': requirement.sessionDurationMinutes,
+    'duration': requirement.durationMinutes,
+    'lecture_duration': requirement.lectureDurationMinutes,
+    'lab_duration': requirement.labDurationMinutes,
+    'department': requirement.department,
+    'preferred_days': requirement.preferredDays,
+    'preferred_starts': requirement.preferredStartMinutes,
+    'preferred_rooms': requirement.preferredRoomIds,
+  };
+
+  static Map<String, dynamic> _issueMap(ManualIssue issue) => <String, dynamic>{
+    'code': issue.code,
+    'message': issue.message,
+    'session_ids': issue.sessionIds,
+    'is_hard': issue.isHard,
+  };
+
+  static Map<String, dynamic> _unassignedMap(
+    TimetableUnassignedRequirement item,
+  ) => <String, dynamic>{
+    'id': item.id,
+    'requirement_id': item.requirementId,
+    'subject_id': item.subjectId,
+    'batch_id': item.batchId,
+    'faculty_id': item.facultyId,
+    'is_practical': item.isPractical,
+    'duration': item.durationMinutes,
+    'reason': item.reason,
+  };
 
   List<ManualSession>? _decodeSessions(Object? value) {
     if (value is! List) return null;
@@ -821,6 +1256,123 @@ class ManualTimetableController extends ChangeNotifier {
     }
   }
 
+  List<ManualSubject>? _decodeSubjects(Object? value) {
+    if (value is! List) return null;
+    try {
+      return value.map((raw) {
+        final item = _map(raw);
+        return ManualSubject(
+          id: item['id'] as String,
+          name: item['name'] as String,
+          code: item['code'] as String,
+          isPractical: item['is_practical'] as bool? ?? false,
+          lectureHours: _intOr(item['lecture_hours'], 0),
+          labHours: _intOr(item['lab_hours'], 0),
+        );
+      }).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<ManualBatch>? _decodeBatches(Object? value) {
+    if (value is! List) return null;
+    try {
+      return value.map((raw) {
+        final item = _map(raw);
+        return ManualBatch(
+          id: item['id'] as String,
+          name: item['name'] as String,
+          year: _intOr(item['year'], 1),
+          size: _intOr(item['size'], 0),
+          department: item['department'] as String? ?? 'Information Technology',
+        );
+      }).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<TimetableTeachingRequirement>? _decodeRequirements(Object? value) {
+    if (value is! List) return null;
+    try {
+      return value.map((raw) {
+        final item = _map(raw);
+        return TimetableTeachingRequirement(
+          id: item['id'] as String? ?? '',
+          subjectId: item['subject_id'] as String,
+          batchId: item['batch_id'] as String,
+          facultyId: item['faculty_id'] as String,
+          lectureHours: _nullableInt(item['lecture_hours']),
+          labHours: _nullableInt(item['lab_hours']),
+          lectureSessions: _nullableInt(item['lecture_sessions']),
+          labSessions: _nullableInt(item['lab_sessions']),
+          isPractical: item['is_practical'] as bool? ?? false,
+          practical: item['practical'] as bool? ?? false,
+          sessionDurationMinutes: _nullableInt(item['session_duration']),
+          durationMinutes: _nullableInt(item['duration']),
+          lectureDurationMinutes: _nullableInt(item['lecture_duration']),
+          labDurationMinutes: _nullableInt(item['lab_duration']),
+          department: item['department'] as String?,
+          preferredDays: _intList(item['preferred_days']),
+          preferredStartMinutes: _intList(item['preferred_starts']),
+          preferredRoomIds: _stringList(item['preferred_rooms']),
+        );
+      }).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<ManualIssue> _decodeIssues(Object? value) {
+    if (value is! List) return <ManualIssue>[];
+    return value.map((raw) {
+      final item = _map(raw);
+      return ManualIssue(
+        code: item['code'] as String? ?? 'UNKNOWN',
+        message: item['message'] as String? ?? 'Unknown issue',
+        sessionIds: _stringList(item['session_ids']),
+        isHard: item['is_hard'] as bool? ?? true,
+      );
+    }).toList();
+  }
+
+  List<TimetableUnassignedRequirement> _decodeUnassigned(Object? value) {
+    if (value is! List) return <TimetableUnassignedRequirement>[];
+    try {
+      return value.map((raw) {
+        final item = _map(raw);
+        return TimetableUnassignedRequirement(
+          id: item['id'] as String,
+          requirementId: item['requirement_id'] as String,
+          subjectId: item['subject_id'] as String,
+          batchId: item['batch_id'] as String,
+          facultyId: item['faculty_id'] as String,
+          isPractical: item['is_practical'] as bool? ?? false,
+          durationMinutes: _intOr(item['duration'], 0),
+          reason: item['reason'] as String? ?? 'No placement found.',
+        );
+      }).toList();
+    } catch (_) {
+      return <TimetableUnassignedRequirement>[];
+    }
+  }
+
+  Set<int> _decodeWorkingDays(Object? value) {
+    final days = _intList(value)
+        .where((day) => day >= 0 && day < dayNames.length)
+        .toSet();
+    return days.isEmpty ? <int>{0, 1, 2, 3, 4, 5} : days;
+  }
+
+  TimetableGenerationStatus? _decodeGenerationStatus(Object? value) {
+    if (value is! String) return null;
+    for (final status in TimetableGenerationStatus.values) {
+      if (status.name == value) return status;
+    }
+    return null;
+  }
+
   List<ManualSwapRequest>? _decodeSwaps(Object? value) {
     if (value is! List) return null;
     try {
@@ -845,6 +1397,59 @@ class ManualTimetableController extends ChangeNotifier {
 
   static int _int(Object? value) =>
       value is num ? value.toInt() : int.parse('$value');
+
+  static int _intOr(Object? value, int fallback) =>
+      value is num ? value.toInt() : int.tryParse('$value') ?? fallback;
+
+  static int? _nullableInt(Object? value) =>
+      value == null ? null : _intOr(value, 0);
+
+  static List<int> _intList(Object? value) => value is List
+      ? value.whereType<num>().map((item) => item.toInt()).toList()
+      : <int>[];
+
+  static List<String> _stringList(Object? value) =>
+      value is List ? value.whereType<String>().toList() : <String>[];
+
+  void _rebuildTimeSlots() {
+    final slots = <ManualTimeSlot>[];
+    final starts = <int>[540, 600, 660, 750, 810, 870];
+    for (final day in workingDays) {
+      for (final start in starts) {
+        final end = start + 50;
+        if (_overlaps(start, end, _breakStart, _breakEnd)) continue;
+        slots.add(ManualTimeSlot(day: day, startMinute: start, endMinute: end));
+      }
+      slots.add(
+        ManualTimeSlot(
+          day: day,
+          startMinute: _breakStart,
+          endMinute: _breakEnd,
+          isBreak: true,
+          label: _breakLabel,
+        ),
+      );
+    }
+    slots.sort((left, right) {
+      final day = left.day.compareTo(right.day);
+      if (day != 0) return day;
+      return left.startMinute.compareTo(right.startMinute);
+    });
+    _timeSlots = slots;
+    if (_selectedDay >= dayNames.length ||
+        !_workingDays.contains(_selectedDay)) {
+      _selectedDay = workingDays.isEmpty ? 0 : workingDays.first;
+    }
+  }
+
+  void _invalidateGeneratedTimetable() {
+    if (_generationResult == null && _sessions.isEmpty) return;
+    _sessions = <ManualSession>[];
+    _generationResult = null;
+    _generationStatus = null;
+    _generationIssues = <ManualIssue>[];
+    _hasLocalValidation = false;
+  }
 
   void _refreshIssues() {
     final hard = <ManualIssue>[];
@@ -1036,8 +1641,17 @@ class ManualTimetableController extends ChangeNotifier {
       }
     }
 
-    _hardConflicts = hard;
-    _softWarnings = soft;
+    final allHard = <ManualIssue>[];
+    final allSoft = <ManualIssue>[];
+    final seen = <String>{};
+    for (final issue in <ManualIssue>[..._generationIssues, ...hard, ...soft]) {
+      final key =
+          '${issue.code}|${issue.message}|${issue.sessionIds.join(',')}';
+      if (!seen.add(key)) continue;
+      (issue.isHard ? allHard : allSoft).add(issue);
+    }
+    _hardConflicts = allHard;
+    _softWarnings = allSoft;
   }
 
   int _sessionIndex(Object sessionOrId) {
@@ -1438,10 +2052,149 @@ class ManualTimetableController extends ChangeNotifier {
     ];
 
     // The seed literals above are const for readability, but all collections
-    // become mutable draft state once the editor opens.
+    // become mutable setup state once the workspace opens. The timetable itself
+    // starts empty; it is produced only after the coordinator presses Generate.
     _faculty = List<ManualFaculty>.from(_faculty);
     _rooms = List<ManualRoom>.from(_rooms);
     _batches = List<ManualBatch>.from(_batches);
     _subjects = List<ManualSubject>.from(_subjects);
+    _workingDays = <int>{0, 1, 2, 3, 4, 5};
+    _institutionName = defaultInstitution;
+    _semesterLabel = defaultSemester;
+    _breakStart = 720;
+    _breakEnd = 750;
+    _breakLabel = 'Lunch break';
+    _requirements = _demoRequirements();
+    _sessions = <ManualSession>[];
+    _rebuildTimeSlots();
   }
+
+  List<TimetableTeachingRequirement> _demoRequirements() => const [
+    TimetableTeachingRequirement(
+      id: 'req-fya-math',
+      subjectId: 'subject-mathematics',
+      batchId: 'batch-fy-it-a',
+      facultyId: 'faculty-kavita',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fyb-math',
+      subjectId: 'subject-mathematics',
+      batchId: 'batch-fy-it-b',
+      facultyId: 'faculty-meera',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-sya-math',
+      subjectId: 'subject-mathematics',
+      batchId: 'batch-sy-it-a',
+      facultyId: 'faculty-kavita',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fya-ds',
+      subjectId: 'subject-data-structures',
+      batchId: 'batch-fy-it-a',
+      facultyId: 'faculty-rohan',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fyb-ds',
+      subjectId: 'subject-data-structures',
+      batchId: 'batch-fy-it-b',
+      facultyId: 'faculty-rohan',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fya-web',
+      subjectId: 'subject-web-programming',
+      batchId: 'batch-fy-it-a',
+      facultyId: 'faculty-sana',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fyb-web',
+      subjectId: 'subject-web-programming',
+      batchId: 'batch-fy-it-b',
+      facultyId: 'faculty-meera',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-sya-web',
+      subjectId: 'subject-web-programming',
+      batchId: 'batch-sy-it-a',
+      facultyId: 'faculty-anuj',
+      lectureSessions: 1,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fya-web-lab',
+      subjectId: 'subject-web-lab',
+      batchId: 'batch-fy-it-a',
+      facultyId: 'faculty-rohan',
+      labSessions: 1,
+      labDurationMinutes: 100,
+      isPractical: true,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fyb-web-lab',
+      subjectId: 'subject-web-lab',
+      batchId: 'batch-fy-it-b',
+      facultyId: 'faculty-anuj',
+      labSessions: 1,
+      labDurationMinutes: 100,
+      isPractical: true,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fyb-dbms',
+      subjectId: 'subject-database',
+      batchId: 'batch-fy-it-b',
+      facultyId: 'faculty-meera',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-sya-dbms',
+      subjectId: 'subject-database',
+      batchId: 'batch-sy-it-a',
+      facultyId: 'faculty-anuj',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fya-dbms-lab',
+      subjectId: 'subject-database-lab',
+      batchId: 'batch-fy-it-a',
+      facultyId: 'faculty-rohan',
+      labSessions: 1,
+      labDurationMinutes: 100,
+      isPractical: true,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fyb-networks',
+      subjectId: 'subject-networks',
+      batchId: 'batch-fy-it-b',
+      facultyId: 'faculty-kavita',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-sya-networks',
+      subjectId: 'subject-networks',
+      batchId: 'batch-sy-it-a',
+      facultyId: 'faculty-sana',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-sya-software',
+      subjectId: 'subject-software',
+      batchId: 'batch-sy-it-a',
+      facultyId: 'faculty-sana',
+      lectureSessions: 2,
+    ),
+    TimetableTeachingRequirement(
+      id: 'req-fya-project',
+      subjectId: 'subject-project',
+      batchId: 'batch-fy-it-a',
+      facultyId: 'faculty-kavita',
+      lectureSessions: 2,
+      sessionDurationMinutes: 50,
+    ),
+  ];
 }

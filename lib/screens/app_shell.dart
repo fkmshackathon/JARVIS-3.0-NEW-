@@ -5,13 +5,13 @@ import '../state/manual_timetable_controller.dart';
 import '../theme/theme_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
-import 'home_screen.dart';
 import 'manual_changes_screen.dart';
 import 'manual_issues_screen.dart';
 import 'manual_rooms_screen.dart';
-import 'manual_timetable_screen.dart';
 import 'manual_workload_screen.dart';
-import 'timetable_hub_screen.dart';
+import 'generate_timetable_screen.dart';
+import 'overview_screen.dart';
+import 'setup_screen.dart';
 
 /// The compact product shell for the local timetable workspace. Home is the
 /// starting point; issues, workload, rooms, and change handling stay one tap
@@ -29,9 +29,10 @@ class _AppShellState extends State<AppShell> {
       ManualTimetableController();
 
   static const List<_Destination> _destinations = [
-    _Destination('Home', Icons.home_outlined, Icons.home),
+    _Destination('Overview', Icons.home_outlined, Icons.home),
+    _Destination('Setup', Icons.tune_outlined, Icons.tune),
     _Destination(
-      'Timetable',
+      'Generate & Timetable',
       Icons.calendar_view_day_outlined,
       Icons.calendar_view_day,
     ),
@@ -101,17 +102,27 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _screenFor(int index) => switch (index) {
-    0 => HomeScreen(
-      manualController: _manualController,
-      onCreateTimetable: _openManualTimetable,
-      onRefineTimetable: _openRefine,
-      onOpenWorkload: _openWorkload,
-      onOpenRooms: _openRooms,
-      onOpenChanges: _openRefine,
-      onOpenIssues: _openIssues,
+    0 => OverviewScreen(
+      controller: _manualController,
+      institutionName: _manualController.institutionName,
+      semesterLabel: _manualController.semesterLabel,
+      onOpenSetup: () => _selectDestination(1),
+      onGenerate: _generateAndOpen,
+      onReview: () => _selectDestination(2),
+      onReset: () {},
     ),
-    1 => TimetableHubScreen(
-      manualController: _manualController,
+    1 => SetupScreen(
+      controller: _manualController,
+      institutionName: _manualController.institutionName,
+      semesterLabel: _manualController.semesterLabel,
+      onSetupComplete: () => _selectDestination(2),
+      onGenerate: _generateAndOpen,
+      onReview: () => _selectDestination(2),
+      onReset: () {},
+    ),
+    2 => GenerateTimetableScreen(
+      controller: _manualController,
+      onOpenSetup: () => _selectDestination(1),
       onOpenWorkload: _openWorkload,
       onOpenRooms: _openRooms,
       onHandleChange: _openRefine,
@@ -120,21 +131,18 @@ class _AppShellState extends State<AppShell> {
     _ => _IssuesDestination(manualController: _manualController),
   };
 
-  void _openManualTimetable() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => _ManagementPage(
-          title: 'Create timetable',
-          child: ManualTimetableScreen(
-            controller: _manualController,
-            onOpenWorkload: _openWorkload,
-            onOpenRooms: _openRooms,
-            onHandleChange: _openRefine,
-            onOpenIssues: _openIssues,
-          ),
-        ),
-      ),
-    );
+  void _selectDestination(int index) {
+    if (!mounted) return;
+    setState(() => _index = index);
+  }
+
+  void _generateAndOpen() {
+    _selectDestination(2);
+    if (!_manualController.canGenerate) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _manualController.generateTimetable();
+    });
   }
 
   void _openRefine() {
@@ -191,7 +199,7 @@ class _Destination {
 
   Widget iconFor(int violations, int index) {
     final plain = Icon(icon);
-    if (index != 2) return plain;
+    if (index != 3) return plain;
     return Badge(
       label: Text('$violations'),
       isLabelVisible: violations > 0,

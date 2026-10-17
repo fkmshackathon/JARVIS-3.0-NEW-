@@ -4,11 +4,10 @@ import '../state/manual_timetable_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
 
-/// Phone-first editor for the deterministic local manual timetable sample.
+/// Phone-first editor for the timetable produced by the deterministic local
+/// generator. It remains useful for post-generation corrections and review.
 ///
-/// The screen is intentionally independent from [SchedulingController]. It can
-/// be opened from a shell route with a [ManualTimetableController] and never
-/// calls the backend or stores credentials.
+/// It never calls the backend or stores credentials.
 class ManualTimetableScreen extends StatefulWidget {
   const ManualTimetableScreen({
     super.key,
@@ -236,12 +235,12 @@ class _ManualHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Manual timetable',
+                  'Generated timetable',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: SynchroSpacing.xs),
                 Text(
-                  'Build a day by placing classes into open slots.',
+                  'Inspect, edit, and revalidate the local schedule.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -250,6 +249,11 @@ class _ManualHeader extends StatelessWidget {
           StatusChip(
             label: controller.isRestoring
                 ? 'Restoring'
+                : !controller.hasGeneratedTimetable
+                ? 'Not generated'
+                : controller.generationStatus ==
+                      TimetableGenerationStatus.infeasible
+                ? 'Partial result'
                 : controller.hasLocalValidation
                 ? (controller.hardConflicts.isEmpty
                       ? 'Locally checked'
@@ -257,8 +261,14 @@ class _ManualHeader extends StatelessWidget {
                 : controller.hasUnsavedChanges
                 ? 'Draft'
                 : 'Not checked',
-            tone: controller.isRestoring || controller.hasUnsavedChanges
+            tone:
+                controller.isRestoring ||
+                    (controller.hasUnsavedChanges &&
+                        !controller.hasLocalValidation)
                 ? Tone.warn
+                : controller.generationStatus ==
+                      TimetableGenerationStatus.infeasible
+                ? Tone.bad
                 : controller.hasLocalValidation &&
                       controller.hardConflicts.isEmpty
                 ? Tone.good
@@ -292,15 +302,22 @@ class _ManualHeader extends StatelessWidget {
             const SizedBox(width: SynchroSpacing.sm),
             Expanded(
               child: Text(
-                controller.dataLabel,
+                controller.hasGeneratedTimetable
+                    ? controller.dataLabel
+                    : 'NO TIMETABLE GENERATED',
                 style: Theme.of(context).textTheme.labelSmall
                     ?.copyWith(color: SynchroColors.navyDeep),
               ),
             ),
-            Text(
-              'No backend',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: SynchroColors.navyDeep),
+            Flexible(
+              child: Text(
+                'Local generator',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: SynchroColors.navyDeep),
+              ),
             ),
           ],
         ),
