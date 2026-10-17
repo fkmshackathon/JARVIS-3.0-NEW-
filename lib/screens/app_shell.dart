@@ -109,6 +109,8 @@ class _AppShellState extends State<AppShell> {
       onOpenSetup: () => _selectDestination(1),
       onGenerate: _generateAndOpen,
       onReview: () => _selectDestination(2),
+      onOpenWorkload: _openWorkload,
+      onOpenRooms: _openRooms,
       onReset: () {},
     ),
     1 => SetupScreen(
@@ -118,6 +120,8 @@ class _AppShellState extends State<AppShell> {
       onSetupComplete: () => _selectDestination(2),
       onGenerate: _generateAndOpen,
       onReview: () => _selectDestination(2),
+      onOpenWorkload: _openWorkload,
+      onOpenRooms: _openRooms,
       onReset: () {},
     ),
     2 => GenerateTimetableScreen(

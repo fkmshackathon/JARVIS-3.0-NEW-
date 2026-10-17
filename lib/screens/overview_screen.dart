@@ -23,6 +23,8 @@ class OverviewScreen extends StatelessWidget {
     this.onOpenSetup,
     this.onGenerate,
     this.onReview,
+    this.onOpenWorkload,
+    this.onOpenRooms,
     this.onReset,
   });
 
@@ -38,6 +40,8 @@ class OverviewScreen extends StatelessWidget {
 
   /// Opens the host's review/editor flow for the local draft.
   final VoidCallback? onReview;
+  final VoidCallback? onOpenWorkload;
+  final VoidCallback? onOpenRooms;
 
   /// Called after the local demo draft has been reset.
   final VoidCallback? onReset;
@@ -87,6 +91,8 @@ class OverviewScreen extends StatelessWidget {
                     _CollectionMetrics(
                       controller: controller,
                       onReview: onReview,
+                      onOpenWorkload: onOpenWorkload,
+                      onOpenRooms: onOpenRooms,
                     ),
                     const SizedBox(height: 16),
                     _ReadinessCard(
@@ -276,10 +282,17 @@ class _TermValue extends StatelessWidget {
 }
 
 class _CollectionMetrics extends StatelessWidget {
-  const _CollectionMetrics({required this.controller, this.onReview});
+  const _CollectionMetrics({
+    required this.controller,
+    this.onReview,
+    this.onOpenWorkload,
+    this.onOpenRooms,
+  });
 
   final ManualTimetableController controller;
   final VoidCallback? onReview;
+  final VoidCallback? onOpenWorkload;
+  final VoidCallback? onOpenRooms;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -297,7 +310,7 @@ class _CollectionMetrics extends StatelessWidget {
               label: 'Faculty',
               value: controller.faculty.length,
               icon: Icons.people_outline,
-              onTap: onReview,
+              onTap: onOpenWorkload ?? onReview,
             ),
           ),
           SizedBox(
@@ -324,7 +337,7 @@ class _CollectionMetrics extends StatelessWidget {
               label: 'Rooms',
               value: controller.rooms.length,
               icon: Icons.meeting_room_outlined,
-              onTap: onReview,
+              onTap: onOpenRooms ?? onReview,
             ),
           ),
         ],

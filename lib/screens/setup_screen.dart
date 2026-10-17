@@ -20,6 +20,8 @@ class SetupScreen extends StatefulWidget {
     this.onSetupComplete,
     this.onGenerate,
     this.onReview,
+    this.onOpenWorkload,
+    this.onOpenRooms,
     this.onReset,
   });
 
@@ -35,6 +37,8 @@ class SetupScreen extends StatefulWidget {
 
   /// Opens the host's collection editor/review flow.
   final VoidCallback? onReview;
+  final VoidCallback? onOpenWorkload;
+  final VoidCallback? onOpenRooms;
 
   /// Called after the local sample draft is restored.
   final VoidCallback? onReset;
@@ -124,6 +128,8 @@ class _SetupScreenState extends State<SetupScreen> {
                     _ResourceReviewGrid(
                       controller: controller,
                       onReview: _review,
+                      onOpenWorkload: widget.onOpenWorkload,
+                      onOpenRooms: widget.onOpenRooms,
                     ),
                     const SizedBox(height: 16),
                     _TeachingRequirementsCard(
@@ -730,10 +736,17 @@ class _PrerequisiteRow extends StatelessWidget {
 }
 
 class _ResourceReviewGrid extends StatelessWidget {
-  const _ResourceReviewGrid({required this.controller, required this.onReview});
+  const _ResourceReviewGrid({
+    required this.controller,
+    required this.onReview,
+    this.onOpenWorkload,
+    this.onOpenRooms,
+  });
 
   final ManualTimetableController controller;
   final VoidCallback onReview;
+  final VoidCallback? onOpenWorkload;
+  final VoidCallback? onOpenRooms;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -764,7 +777,7 @@ class _ResourceReviewGrid extends StatelessWidget {
                       .take(3)
                       .map((person) => person.name)
                       .toList(),
-                  onReview: onReview,
+                  onReview: onOpenWorkload ?? onReview,
                 ),
               ),
               SizedBox(
@@ -803,7 +816,7 @@ class _ResourceReviewGrid extends StatelessWidget {
                       .take(3)
                       .map((room) => '${room.name} · ${room.capacity} seats')
                       .toList(),
-                  onReview: onReview,
+                  onReview: onOpenRooms ?? onReview,
                 ),
               ),
             ],
