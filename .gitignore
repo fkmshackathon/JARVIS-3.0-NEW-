@@ -60,3 +60,13 @@ __pycache__/
 !.env.example
 .opencode/
 
+# Android release signing material — never commit
+*.keystore
+*.jks
+key.properties
+/android/key.properties
+/android/app/*.keystore
+
+# Local scratch / verification artifacts
+.qoder-tmp/
+

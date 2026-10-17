@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'tokens.dart';
 
 /// Material 3 surfaces assembled from [SynchroColors] rather than a generated seed,
-/// because a seeded scheme drifts toward violet and the brand is navy on cream.
+/// keeping forest/mint roles consistent in both light and dark mode.
 abstract final class SynchroTheme {
   static ThemeData get light {
     const scheme = ColorScheme.light(
@@ -18,6 +18,7 @@ abstract final class SynchroTheme {
       tertiary: SynchroColors.navySoft,
       surface: SynchroColors.surface,
       onSurface: SynchroColors.ink,
+      onSurfaceVariant: SynchroColors.inkMuted,
       surfaceContainerLowest: SynchroColors.surface,
       surfaceContainerLow: SynchroColors.creamPale,
       surfaceContainer: SynchroColors.surfaceQuiet,
@@ -62,8 +63,8 @@ abstract final class SynchroTheme {
       onSecondary: SynchroColors.navyDeep,
       surface: SynchroColors.navyDeep,
       onSurface: SynchroColors.onNavy,
-      surfaceContainerLowest: Color(0xFF061634),
-      surfaceContainerLow: Color(0xFF0A2048),
+      surfaceContainerLowest: Color(0xFF0C2017),
+      surfaceContainerLow: Color(0xFF123426),
       surfaceContainer: SynchroColors.navy,
       outline: SynchroColors.navySoft,
       outlineVariant: SynchroColors.navySoft,
@@ -152,6 +153,8 @@ abstract final class SynchroTheme {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'NotoSans',
+      fontFamilyFallback: const ['NotoDevanagari'],
       colorScheme: scheme,
       scaffoldBackgroundColor: scaffold,
       textTheme: text,
@@ -241,6 +244,8 @@ abstract final class SynchroTheme {
     double letterSpacing = SynchroType.tracking,
     double height = 1.25,
   }) => TextStyle(
+    fontFamily: 'NotoSans',
+    fontFamilyFallback: const ['NotoDevanagari'],
     fontSize: size,
     fontWeight: weight,
     color: color,

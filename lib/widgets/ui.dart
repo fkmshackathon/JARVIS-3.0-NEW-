@@ -41,7 +41,10 @@ class SectionCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (overline != null) ...[
-                      Text(overline!.toUpperCase(), style: theme.textTheme.labelSmall),
+                      Text(
+                        overline!.toUpperCase(),
+                        style: theme.textTheme.labelSmall,
+                      ),
                       const SizedBox(height: SynchroSpacing.xs),
                     ],
                     Text(title, style: theme.textTheme.titleMedium),
@@ -52,7 +55,7 @@ class SectionCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: SynchroSpacing.md),
-          child,
+          Material(type: MaterialType.transparency, child: child),
         ],
       ),
     );
@@ -62,24 +65,42 @@ class SectionCard extends StatelessWidget {
 enum Tone { neutral, good, warn, bad }
 
 class StatusChip extends StatelessWidget {
-  const StatusChip({super.key, required this.label, this.tone = Tone.neutral, this.icon});
+  const StatusChip({
+    super.key,
+    required this.label,
+    this.tone = Tone.neutral,
+    this.icon,
+  });
 
   final String label;
   final Tone tone;
   final IconData? icon;
 
   static Color color(Tone tone, Brightness brightness) => switch (tone) {
-        Tone.neutral => brightness == Brightness.dark ? SynchroColors.onNavyMuted : SynchroColors.inkMuted,
-        Tone.good => brightness == Brightness.dark ? SynchroColors.okOnNavy : SynchroColors.ok,
-        Tone.warn => brightness == Brightness.dark ? SynchroColors.warnOnNavy : SynchroColors.warn,
-        Tone.bad => brightness == Brightness.dark ? SynchroColors.dangerOnNavy : SynchroColors.danger,
-      };
+    Tone.neutral =>
+      brightness == Brightness.dark
+          ? SynchroColors.onNavyMuted
+          : SynchroColors.inkMuted,
+    Tone.good =>
+      brightness == Brightness.dark ? SynchroColors.okOnNavy : SynchroColors.ok,
+    Tone.warn =>
+      brightness == Brightness.dark
+          ? SynchroColors.warnOnNavy
+          : SynchroColors.warn,
+    Tone.bad =>
+      brightness == Brightness.dark
+          ? SynchroColors.dangerOnNavy
+          : SynchroColors.danger,
+  };
 
   @override
   Widget build(BuildContext context) {
     final ink = StatusChip.color(tone, Theme.of(context).brightness);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: SynchroSpacing.md, vertical: SynchroSpacing.xs + 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: SynchroSpacing.md,
+        vertical: SynchroSpacing.xs + 2,
+      ),
       decoration: BoxDecoration(
         color: ink.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(SynchroRadius.pill),
@@ -108,7 +129,12 @@ class StatusChip extends StatelessWidget {
 }
 
 class Stat extends StatelessWidget {
-  const Stat({super.key, required this.value, required this.caption, this.tone = Tone.neutral});
+  const Stat({
+    super.key,
+    required this.value,
+    required this.caption,
+    this.tone = Tone.neutral,
+  });
 
   final String value;
   final String caption;
@@ -160,8 +186,8 @@ class MeterRow extends StatelessWidget {
     final ink = over && overIsBad
         ? StatusChip.color(Tone.bad, theme.brightness)
         : over
-            ? StatusChip.color(Tone.good, theme.brightness)
-            : theme.colorScheme.primary;
+        ? StatusChip.color(Tone.good, theme.brightness)
+        : theme.colorScheme.primary;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: SynchroSpacing.sm),
@@ -170,7 +196,13 @@ class MeterRow extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(label, style: theme.textTheme.bodyMedium, overflow: TextOverflow.ellipsis)),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyMedium,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               Text(
                 '$value${limit > 0 ? ' / $limit' : ''}',
                 style: theme.textTheme.titleSmall?.copyWith(
@@ -205,7 +237,13 @@ class MeterRow extends StatelessWidget {
 }
 
 class Notice extends StatelessWidget {
-  const Notice({super.key, required this.text, this.tone = Tone.warn, this.icon, this.action});
+  const Notice({
+    super.key,
+    required this.text,
+    this.tone = Tone.warn,
+    this.icon,
+    this.action,
+  });
 
   final String text;
   final Tone tone;
@@ -230,7 +268,11 @@ class Notice extends StatelessWidget {
           Icon(icon ?? Icons.info_outline, size: 18, color: ink),
           const SizedBox(width: SynchroSpacing.md),
           Expanded(
-            child: Text(text, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ink)),
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: ink),
+            ),
           ),
           ?action,
         ],
@@ -264,9 +306,17 @@ class EmptyState extends StatelessWidget {
           children: [
             Icon(icon, size: 40, color: theme.colorScheme.outline),
             const SizedBox(height: SynchroSpacing.lg),
-            Text(title, style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: SynchroSpacing.sm),
-            Text(body, style: theme.textTheme.bodySmall, textAlign: TextAlign.center),
+            Text(
+              body,
+              style: theme.textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
             if (action != null) ...[
               const SizedBox(height: SynchroSpacing.xl),
               action!,

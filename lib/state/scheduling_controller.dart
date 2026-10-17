@@ -70,7 +70,11 @@ class SchedulingController extends ChangeNotifier {
     notifyListeners();
     try {
       final sample = await api.sampleCampus();
-      final saved = await api.saveCampus(SynchroApi.demoCampusId, sample.name, sample.campus);
+      final saved = await api.saveCampus(
+        SynchroApi.demoCampusId,
+        sample.name,
+        sample.campus,
+      );
       campus = Campus.fromPayload(sample.name, jsonMap(saved['campus']));
       summary = Summary(jsonMap(saved['summary']));
       batchId = campus!.batches.isEmpty ? null : campus!.batches.first.id;
@@ -139,7 +143,9 @@ class SchedulingController extends ChangeNotifier {
         wallTimeMs: current.wallTimeMs,
         message: current.message,
         assignments: current.assignments,
-        violations: jsonMapList(body['violations']).map(Violation.fromMap).toList(),
+        violations: jsonMapList(body['violations'])
+            .map(Violation.fromMap)
+            .toList(),
         publishable: body['publishable'] as bool? ?? false,
         utilisation: Utilisation.fromMap(body['utilisation']),
       );

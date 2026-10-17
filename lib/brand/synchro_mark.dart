@@ -165,6 +165,22 @@ class _MarkPainter extends CustomPainter {
         );
       }
     }
+    // An original small sprout, not a copyrighted character or remote image.
+    final leaf = Path()
+      ..moveTo(size.width * .63, size.height * .32)
+      ..quadraticBezierTo(
+        size.width * .62,
+        size.height * .12,
+        size.width * .83,
+        size.height * .14,
+      )
+      ..quadraticBezierTo(
+        size.width * .84,
+        size.height * .32,
+        size.width * .63,
+        size.height * .32,
+      );
+    canvas.drawPath(leaf, Paint()..color = palette.accent);
   }
 
   void _arrowhead(

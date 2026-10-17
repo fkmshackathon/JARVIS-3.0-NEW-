@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:synchro/main.dart';
 import 'package:synchro/theme/theme_controller.dart';
+import 'support/fake_auth.dart';
 
 void main() {
   setUp(() {
@@ -103,7 +104,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Generated timetable'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Sign out of local demo').first);
+    final signOutFinder = find.byTooltip('Sign out');
+    final demoSignOutFinder = find.byTooltip('Sign out of local demo');
+    await tester.tap(signOutFinder.evaluate().isNotEmpty ? signOutFinder.first : demoSignOutFinder.first);
     await tester.pumpAndSettle();
     expect(find.text('Welcome to SYNCHRO.'), findsOneWidget);
 
@@ -145,7 +148,7 @@ void _phone(WidgetTester tester) {
 }
 
 Future<void> _bootSignedIn(WidgetTester tester) async {
-  await tester.pumpWidget(const SynchroApp());
+  await tester.pumpWidget(SynchroApp(session: testAuthSession()));
   await tester.pumpAndSettle();
   expect(find.text('Welcome to SYNCHRO.'), findsOneWidget);
   await _completeAccess(tester);

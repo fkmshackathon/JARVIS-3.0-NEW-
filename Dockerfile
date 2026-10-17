@@ -1,6 +1,4 @@
-# Reproducible two-process compatibility image: FastAPI on :8000 and the
-# Flutter web build on :8080. The current frontend workflow is local-only; the
-# API remains available for preserved backend regression work.
+# Same-origin deployment: Flutter web + scheduling API + server-only Groq.
 FROM ghcr.io/cirruslabs/flutter:3.47.1 AS flutter-build
 
 WORKDIR /workspace
@@ -13,7 +11,9 @@ FROM python:3.14.7-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/workspace/backend
+    PYTHONPATH=/workspace/backend \
+    SYNCHRO_WEB_DIR=/workspace/web-build \
+    PORT=8080
 
 WORKDIR /workspace
 RUN apt-get update \
@@ -27,5 +27,5 @@ COPY --from=flutter-build /workspace/build/web web-build
 COPY docker-entrypoint.sh docker-entrypoint.sh
 RUN chmod +x docker-entrypoint.sh
 
-EXPOSE 8000 8080
+EXPOSE 8080
 CMD ["/workspace/docker-entrypoint.sh"]

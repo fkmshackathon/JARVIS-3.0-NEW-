@@ -2,27 +2,33 @@ import 'package:flutter/material.dart';
 
 /// SYNCHRO design tokens.
 ///
-/// Navy is the identity, cream is the page, orange is only ever an action or an
-/// important signal — the moment orange decorates, it stops meaning "do this".
+/// Buildasaur Round 2: restrained botanical surfaces with high-contrast forest
+/// actions. Legacy colour names remain aliases so existing widgets share the
+/// new identity without rewriting timetable business logic.
 abstract final class SynchroColors {
-  static const Color navy = Color(0xFF0D2B60);
-  static const Color navyDeep = Color(0xFF081C40);
-  static const Color navySoft = Color(0xFF1B3D76);
-  static const Color cream = Color(0xFFFFF0C7);
-  static const Color creamPale = Color(0xFFFBF6E7);
-  static const Color orange = Color(0xFFFF8A32);
-  static const Color orangeDeep = Color(0xFFE2671A);
+  static const Color forest = Color(0xFF176B45);
+  static const Color deepGreen = Color(0xFF104C35);
+  static const Color leaf = Color(0xFF39A96B);
+  static const Color mint = Color(0xFFE7F5E9);
+  static const Color natural = Color(0xFFF5F8EF);
+  static const Color navy = forest;
+  static const Color navyDeep = deepGreen;
+  static const Color navySoft = Color(0xFF28734F);
+  static const Color cream = mint;
+  static const Color creamPale = natural;
+  static const Color orange = Color(0xFFB3E9BE);
+  static const Color orangeDeep = forest;
 
-  static const Color ink = Color(0xFF101828);
-  static const Color inkMuted = Color(0xFF55618A);
+  static const Color ink = Color(0xFF17251C);
+  static const Color inkMuted = Color(0xFF5B6D60);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceQuiet = Color(0xFFF6F3EA);
-  static const Color hairline = Color(0xFFE2DCC9);
-  static const Color outer = Color(0xFFE6E0D3);
+  static const Color surfaceQuiet = Color(0xFFEEF5E9);
+  static const Color hairline = Color(0xFFD8E5D7);
+  static const Color outer = Color(0xFFE8EEE1);
 
-  static const Color ok = Color(0xFF1F7A4D);
-  static const Color warn = Color(0xFFB4790A);
-  static const Color danger = Color(0xFFB42318);
+  static const Color ok = Color(0xFF218653);
+  static const Color warn = Color(0xFF946011);
+  static const Color danger = Color(0xFFC93C3C);
 
   /// The three verdict tones above are legible on cream but sink into navy, so the
   /// dark scheme lifts the same hues rather than reusing them.
@@ -30,8 +36,8 @@ abstract final class SynchroColors {
   static const Color warnOnNavy = Color(0xFFFFC46B);
   static const Color dangerOnNavy = Color(0xFFFF8A80);
 
-  static const Color onNavy = Color(0xFFF7F4EC);
-  static const Color onNavyMuted = Color(0xFFA9B6D6);
+  static const Color onNavy = Color(0xFFFFFFFF);
+  static const Color onNavyMuted = Color(0xFFC9E9D4);
 }
 
 abstract final class SynchroSpacing {

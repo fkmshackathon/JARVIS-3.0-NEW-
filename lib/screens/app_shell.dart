@@ -5,7 +5,8 @@ import '../state/manual_timetable_controller.dart';
 import '../theme/theme_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
-import 'manual_changes_screen.dart';
+import 'timetable_operations_screen.dart';
+import 'architecture_screen.dart';
 import 'manual_issues_screen.dart';
 import 'manual_rooms_screen.dart';
 import 'manual_workload_screen.dart';
@@ -19,10 +20,16 @@ import '../state/timetable_library_controller.dart';
 /// starting point; issues, workload, rooms, and change handling stay one tap
 /// away without adding redundant primary tabs.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.library, required this.onSignOut});
+  const AppShell({
+    super.key,
+    required this.library,
+    required this.onSignOut,
+    this.onPageChanged,
+  });
 
   final TimetableLibraryController library;
   final VoidCallback onSignOut;
+  final ValueChanged<String>? onPageChanged;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -54,6 +61,20 @@ class _AppShellState extends State<AppShell> {
           bottom: false,
           child: Column(
             children: [
+              if (_index == 0)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        settings: const RouteSettings(name: 'Architecture'),
+                        builder: (_) => const ArchitectureScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.account_tree_outlined, size: 17),
+                    label: const Text('Architecture'),
+                  ),
+                ),
               if (_index != 0)
                 _ShellHeader(
                   index: _index,
@@ -83,7 +104,7 @@ class _AppShellState extends State<AppShell> {
           final violations = _manualController.hardConflicts.length;
           return NavigationBar(
             selectedIndex: _index,
-            onDestinationSelected: (value) => setState(() => _index = value),
+            onDestinationSelected: _selectDestination,
             destinations: [
               for (var i = 0; i < _destinations.length; i++)
                 NavigationDestination(
@@ -125,6 +146,7 @@ class _AppShellState extends State<AppShell> {
       onReset: _resetDemo,
     ),
     2 => GenerateTimetableScreen(
+      key: ValueKey(_library.activeId),
       controller: _manualController,
       onOpenSetup: () => _selectDestination(1),
       onOpenWorkload: _openWorkload,
@@ -139,6 +161,7 @@ class _AppShellState extends State<AppShell> {
   void _selectDestination(int index) {
     if (!mounted) return;
     setState(() => _index = index);
+    widget.onPageChanged?.call(_destinations[index].label);
   }
 
   void _generateAndOpen() {
@@ -165,7 +188,10 @@ class _AppShellState extends State<AppShell> {
       MaterialPageRoute<void>(
         builder: (_) => _ManagementPage(
           title: 'Handle a change',
-          child: ManualChangesScreen(controller: _manualController),
+          child: TimetableOperationsScreen(
+            controller: _manualController,
+            activeTimetableId: () => _library.activeId,
+          ),
         ),
       ),
     );
@@ -307,7 +333,7 @@ class _ShellHeader extends StatelessWidget {
           ),
           status,
           IconButton(
-            tooltip: 'Sign out of local demo',
+            tooltip: 'Sign out',
             onPressed: onSignOut,
             icon: const Icon(
               Icons.logout_outlined,

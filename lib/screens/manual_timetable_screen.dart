@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../state/manual_timetable_controller.dart';
+import '../state/timetable_view.dart';
 import '../theme/tokens.dart';
+import '../widgets/timetable_scope_controls.dart';
 import '../widgets/ui.dart';
 
 String _formatClock(int minutes) {
@@ -44,6 +46,7 @@ class ManualTimetableScreen extends StatefulWidget {
 
 class _ManualTimetableScreenState extends State<ManualTimetableScreen> {
   ManualTimetableController get controller => widget.controller;
+  TimetableViewFilter _filter = const TimetableViewFilter();
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -61,10 +64,16 @@ class _ManualTimetableScreenState extends State<ManualTimetableScreen> {
             children: [
               _ManualHeader(controller: controller),
               const SizedBox(height: SynchroSpacing.lg),
-              _ManualControls(
+              TimetableScopeControls(
                 controller: controller,
-                onAdd: () => _openEditor(),
+                onChanged: (filter) => setState(() => _filter = filter),
               ),
+              const SizedBox(height: SynchroSpacing.lg),
+              if (_filter.kind == TimetableViewKind.classView)
+                _ManualControls(
+                  controller: controller,
+                  onAdd: () => _openEditor(),
+                ),
               const SizedBox(height: SynchroSpacing.md),
               _DraftActions(controller: controller, onReset: _resetDemo),
               const SizedBox(height: SynchroSpacing.lg),
@@ -80,7 +89,13 @@ class _ManualTimetableScreenState extends State<ManualTimetableScreen> {
                 _IssuesCard(controller: controller),
               ],
               const SizedBox(height: SynchroSpacing.lg),
-              if (constraints.maxWidth >= 900)
+              if (_filter.kind != TimetableViewKind.classView)
+                _ScopeSchedule(
+                  controller: controller,
+                  filter: _filter,
+                  onOpen: _openDetails,
+                )
+              else if (constraints.maxWidth >= 900)
                 _DesktopWeekGrid(
                   controller: controller,
                   onAdd: (day, start, end) =>
@@ -230,6 +245,62 @@ class _ManualTimetableScreenState extends State<ManualTimetableScreen> {
       ),
     );
     if (confirmed == true) await controller.resetDemo();
+  }
+}
+
+class _ScopeSchedule extends StatelessWidget {
+  const _ScopeSchedule({
+    required this.controller,
+    required this.filter,
+    required this.onOpen,
+  });
+  final ManualTimetableController controller;
+  final TimetableViewFilter filter;
+  final ValueChanged<ManualSession> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final sessions = filter.sessions(controller);
+    return SectionCard(
+      title: '${filter.kind.label} timetable · ${sessions.length} sessions',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (sessions.isEmpty)
+            const Text(
+              'No sessions match these filters. Generate a timetable or choose a different scope.',
+            ),
+          for (final day in controller.workingDays)
+            if (filter.day == null || filter.day == day) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  controller.dayName(day),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Text(
+                '${_formatClock(controller.breakStart)}–${_formatClock(controller.breakEnd)} · ${controller.breakLabel}',
+              ),
+              for (final session in sessions.where((s) => s.day == day))
+                Card(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  child: ListTile(
+                    isThreeLine: true,
+                    title: Text(
+                      '${_formatClock(session.startMinute)}–${_formatClock(session.endMinute)} · ${controller.subjectById(session.subjectId)?.name ?? session.subjectId}',
+                    ),
+                    subtitle: Text(
+                      '${controller.batchById(session.batchId)?.name ?? session.batchId} · ${controller.facultyById(session.facultyId)?.name ?? session.facultyId}\n${controller.roomById(session.roomId)?.name ?? session.roomId} · ${session.type.label}',
+                    ),
+                    trailing: const Icon(Icons.edit_outlined),
+                    onTap: () => onOpen(session),
+                  ),
+                ),
+            ],
+        ],
+      ),
+    );
   }
 }
 
@@ -666,18 +737,20 @@ class _DesktopWeekGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final days = controller.workingDays;
-    final starts =
-        controller.timeSlots
-            .where((slot) => !slot.isBreak)
-            .map((slot) => slot.startMinute)
-            .toSet()
-            .toList()
-          ..sort();
+    final starts = {
+      for (final slot in controller.timeSlots) slot.startMinute,
+      for (final session in controller.sessionsFor(
+        batchId: controller.selectedBatchId,
+      ))
+        session.startMinute,
+    }.toList()..sort();
     final sessions = <String, ManualSession>{
       for (final session in controller.sessionsFor(
         batchId: controller.selectedBatchId,
       ))
-        '${session.day}:${session.startMinute}': session,
+        for (final start in starts)
+          if (session.startMinute <= start && start < session.endMinute)
+            '${session.day}:$start': session,
     };
 
     return SectionCard(
@@ -786,10 +859,10 @@ class _DesktopGridCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (slot == null) return const SizedBox(height: 86);
-    if (slot!.isBreak) {
+    if (slot == null && session == null) return const SizedBox(height: 140);
+    if (slot?.isBreak == true) {
       return Container(
-        height: 86,
+        height: 140,
         color: SynchroColors.cream,
         alignment: Alignment.center,
         child: Text(
@@ -800,7 +873,7 @@ class _DesktopGridCell extends StatelessWidget {
     }
     if (session == null) {
       return SizedBox(
-        height: 86,
+        height: 140,
         child: InkWell(
           onTap: () => onAdd(slot!.day, slot!.startMinute, slot!.endMinute),
           child: Center(
@@ -809,15 +882,43 @@ class _DesktopGridCell extends StatelessWidget {
         ),
       );
     }
-    return SizedBox(
-      height: 86,
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: _ManualSessionCard(
-          session: session!,
-          controller: controller,
-          onTap: () => onOpen(session!),
-          compact: true,
+    final current = session!;
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      child: InkWell(
+        onTap: () => onOpen(current),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 140),
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                controller.subjectById(current.subjectId)?.code ??
+                    current.subjectId,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                controller.facultyById(current.facultyId)?.name ??
+                    current.facultyId,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                controller.roomById(current.roomId)?.name ?? current.roomId,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                current.type.label,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
         ),
       ),
     );

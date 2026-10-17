@@ -1,4 +1,4 @@
-name: Android Release & CI
+name: SYNCHRO CI & Android Release
 
 on:
   push:
@@ -8,136 +8,180 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
     inputs:
-      create_release:
-        description: 'Publish GitHub Release'
+      tag:
+        description: 'Existing v* tag to build and publish (leave empty for a CI-only run)'
         required: false
-        default: true
-        type: boolean
+        default: ''
 
 permissions:
   contents: write
 
+env:
+  # Asset name must stay byte-identical across releases: this is what makes
+  # /releases/latest/download/SYNCHRO-Android.apk a permanent link.
+  APK_ASSET_NAME: SYNCHRO-Android.apk
+  PRODUCTION_API_URL: https://jarvis-synchro-backend.up.railway.app
+
 jobs:
   backend-test:
-    name: Backend Test Suite
+    name: Backend test suite
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Install backend dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
 
-      - name: Run backend pytest
-        run: |
-          pytest backend
+      - name: Run pytest
+        run: pytest backend
 
-  build-and-release-android:
-    name: Build & Package Android APK
+  flutter-check:
+    name: Flutter analyze & test
     runs-on: ubuntu-latest
-    needs: [backend-test]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          channel: 'stable'
+          cache: true
+
+      - name: Install packages
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+  android-release:
+    name: Build & publish signed APK
+    runs-on: ubuntu-latest
+    needs: [ backend-test, flutter-check ]
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.1'
           channel: 'stable'
           cache: true
 
-      - name: Install Flutter dependencies
-        run: flutter pub get
-
-      - name: Verify static analysis
-        run: flutter analyze
-
-      - name: Run Flutter test suite
-        run: flutter test
-
-      - name: Configure Android Keystores
+      - name: Resolve release tag
+        id: release
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
-          mkdir -p ~/.android ~/.config/.android android/app
-          keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" || true
-          cp ~/.android/debug.keystore ~/.config/.android/debug.keystore || true
+          TAG="${INPUT_TAG:-${GITHUB_REF_NAME}}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          VERSION="${TAG#v}"
+          PUBSPEC_VERSION="$(grep -E '^version:' pubspec.yaml | sed 's/^version:[[:space:]]*//' | cut -d+ -f1)"
+          if [ "$VERSION" != "$PUBSPEC_VERSION" ]; then
+            echo "::error::Tag $TAG does not match pubspec version $PUBSPEC_VERSION. Bump pubspec.yaml before tagging."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-          keytool -genkeypair -v \
-            -keystore android/app/release.keystore \
-            -storepass synchro123 \
-            -alias synchro \
-            -keypass synchro123 \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=JARVIS 3.0, OU=SYNCHRO, O=FKMS, L=Global, S=Global, C=US"
-
-          cat <<EOF > android/key.properties
-          storePassword=synchro123
-          keyPassword=synchro123
-          keyAlias=synchro
-          storeFile=release.keystore
+      - name: Verify signing secrets exist
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          missing=""
+          [ -z "$KEYSTORE_B64" ] && missing="$missing ANDROID_KEYSTORE_BASE64"
+          [ -z "$KEYSTORE_PASSWORD" ] && missing="$missing KEYSTORE_PASSWORD"
+          [ -z "$KEY_PASSWORD" ] && missing="$missing KEY_PASSWORD"
+          [ -z "$KEY_ALIAS" ] && missing="$missing KEY_ALIAS"
+          if [ -n "$missing" ]; then
+            echo "::error::Release signing is not configured. Missing GitHub Actions secrets:$missing"
+            echo "Add the SYNCHRO release keystore (base64) and its passwords under Settings > Secrets and variables > Actions. Never generate a throwaway keystore here: a new key breaks the ability to update installed apps."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_B64" | base64 -d > android/app/synchro-release.keystore
+          if [ ! -s android/app/synchro-release.keystore ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 decoded to an empty file."
+            exit 1
+          fi
+          cat > android/key.properties <<EOF
+          storeFile=synchro-release.keystore
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
           EOF
 
-      - name: Build Android Release APK
+      - name: Install packages
+        run: flutter pub get
+
+      - name: Build signed release APK
         env:
           SYNCHRO_API_URL: ${{ secrets.SYNCHRO_API_URL }}
         run: |
-          API_URL="${SYNCHRO_API_URL:-https://jarvis-synchro-backend.up.railway.app}"
+          API_URL="${SYNCHRO_API_URL:-$PRODUCTION_API_URL}"
+          echo "Building against backend: $API_URL"
+          case "$API_URL" in
+            https://*) ;;
+            *) echo "::error::Refusing to ship a non-HTTPS backend URL: $API_URL"; exit 1;;
+          esac
           flutter build apk --release --dart-define=SYNCHRO_API="$API_URL"
 
-      - name: Package Release APK
+      - name: Confirm production signing identity
+        run: |
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME/build-tools"/* | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | tee /tmp/certs.txt
+          if grep -qi "CN=Android Debug" /tmp/certs.txt; then
+            echo "::error::APK is debug-signed. Release secrets were not applied; refusing to publish."
+            exit 1
+          fi
+          if ! grep -q "CN=SYNCHRO" /tmp/certs.txt; then
+            echo "::error::APK is not signed by the SYNCHRO release certificate."
+            exit 1
+          fi
+
+      - name: Package artifact
         run: |
           mkdir -p release-output
-          cp build/app/outputs/flutter-apk/app-release.apk release-output/JARVIS-3.0-v1.0.0.apk
-          sha256sum release-output/JARVIS-3.0-v1.0.0.apk > release-output/JARVIS-3.0-v1.0.0.apk.sha256
-          echo "Release APK and SHA256 checksum created."
+          cp build/app/outputs/flutter-apk/app-release.apk "release-output/$APK_ASSET_NAME"
+          ( cd release-output && sha256sum "$APK_ASSET_NAME" > "$APK_ASSET_NAME.sha256" )
+          ls -la release-output
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: JARVIS-3.0-v1.0.0.apk
-          path: release-output/JARVIS-3.0-v1.0.0.apk
-          if-no-files-found: error
+          name: ${{ env.APK_ASSET_NAME }}
+          path: release-output/
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true') || github.ref == 'refs/heads/main'
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.0' }}
-          name: JARVIS 3.0 v1.0.0 Android Release
-          body: |
-            ## JARVIS 3.0 (SYNCHRO) — Android Production Release v1.0.0
-
-            ### 🚀 Direct Download
-            Download the official Android APK:
-            - **[JARVIS-3.0-v1.0.0.apk](https://github.com/fkmshackathon/JARVIS-3.0-NEW-/releases/latest/download/JARVIS-3.0-v1.0.0.apk)**
-
-            ### 📱 Verification & Requirements
-            - **Target Android Version:** Android 8.0+ (API level 26+)
-            - **SHA-256 Checksum:** See attached `JARVIS-3.0-v1.0.0.apk.sha256`
-
-            ### ✨ What's Included
-            - Complete offline-first timetable generation and editing engine
-            - Multi-timetable library management with persistent local storage
-            - Conflict checking, workload visualization, and term rhythm setup
-            - Compatible with both local standalone mode and deployed FastAPI solver backend
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: SYNCHRO Android v${{ steps.release.outputs.version }}
+          body_path: .github/release-notes.md
           files: |
-            release-output/JARVIS-3.0-v1.0.0.apk
-            release-output/JARVIS-3.0-v1.0.0.apk.sha256
+            release-output/${{ env.APK_ASSET_NAME }}
+            release-output/${{ env.APK_ASSET_NAME }}.sha256
           draft: false
           prerelease: false

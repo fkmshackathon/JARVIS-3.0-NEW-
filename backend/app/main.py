@@ -12,11 +12,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import Body, FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .analysis import utilisation, workload_summary
+from .assistant import router as assistant_router
 from .models import Campus
 from .sample import demo_campus
 from .serialize import (
@@ -45,6 +47,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(assistant_router)
 store = CampusStore(DATABASE)
 
 
@@ -113,7 +116,7 @@ def get_campus(campus_id: str) -> dict:
     return record
 
 
-@app.delete("/campuses/{campus_id}", status_code=204)
+@app.delete("/campuses/{campus_id}", status_code=204, response_model=None)
 def delete_campus(campus_id: str) -> None:
     if not store.delete_campus(campus_id):
         raise HTTPException(status_code=404, detail=f"No campus '{campus_id}'.")
@@ -203,3 +206,10 @@ def validate_timetable(campus_id: str, body: ValidateBody = Body(...)) -> dict:
         "publishable": not violations,
         "utilisation": utilisation(campus, parsed),
     }
+
+
+# Optional same-origin deployment. API routes are registered before the static
+# fallback, so /assistant/chat and existing scheduling endpoints stay reachable.
+web_directory = os.environ.get("SYNCHRO_WEB_DIR")
+if web_directory and Path(web_directory).is_dir():
+    app.mount("/", StaticFiles(directory=web_directory, html=True), name="web")

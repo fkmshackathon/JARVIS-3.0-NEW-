@@ -98,6 +98,8 @@ class ManualFaculty {
     this.maxWeeklyHours = 24,
     this.absences = const <ManualAbsence>[],
     this.isProxy = false,
+    this.qualifiedSubjectIds = const <String>[],
+    this.hardWeeklyHourLimit,
   });
 
   final String id;
@@ -106,6 +108,12 @@ class ManualFaculty {
   final int maxWeeklyHours;
   final List<ManualAbsence> absences;
   final bool isProxy;
+
+  /// Explicit subject authorisations, in addition to configured teaching loads.
+  final List<String> qualifiedSubjectIds;
+
+  /// Null means the existing weekly target is only a soft preference.
+  final int? hardWeeklyHourLimit;
 
   bool isAbsentAt(int day, int startMinute, int endMinute) => absences.any(
     (absence) =>
@@ -125,6 +133,8 @@ class ManualFaculty {
     int? maxWeeklyHours,
     List<ManualAbsence>? absences,
     bool? isProxy,
+    List<String>? qualifiedSubjectIds,
+    int? hardWeeklyHourLimit,
   }) => ManualFaculty(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -132,6 +142,10 @@ class ManualFaculty {
     maxWeeklyHours: maxWeeklyHours ?? this.maxWeeklyHours,
     absences: List<ManualAbsence>.unmodifiable(absences ?? this.absences),
     isProxy: isProxy ?? this.isProxy,
+    qualifiedSubjectIds: List<String>.unmodifiable(
+      qualifiedSubjectIds ?? this.qualifiedSubjectIds,
+    ),
+    hardWeeklyHourLimit: hardWeeklyHourLimit ?? this.hardWeeklyHourLimit,
   );
 }
 
@@ -159,6 +173,7 @@ class ManualRoom {
     this.borrowable = true,
     this.isAvailable = true,
     this.unavailableSlots = const <ManualRoomClosure>[],
+    this.equipment = const <String>[],
   });
 
   final String id;
@@ -169,6 +184,7 @@ class ManualRoom {
   final bool borrowable;
   final bool isAvailable;
   final List<ManualRoomClosure> unavailableSlots;
+  final List<String> equipment;
 
   bool get isLab =>
       kind.toLowerCase() == 'laboratory' || kind.toLowerCase() == 'lab';
@@ -195,6 +211,7 @@ class ManualRoom {
     bool? borrowable,
     bool? isAvailable,
     List<ManualRoomClosure>? unavailableSlots,
+    List<String>? equipment,
   }) => ManualRoom(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -206,6 +223,7 @@ class ManualRoom {
     unavailableSlots: List<ManualRoomClosure>.unmodifiable(
       unavailableSlots ?? this.unavailableSlots,
     ),
+    equipment: List<String>.unmodifiable(equipment ?? this.equipment),
   );
 }
 

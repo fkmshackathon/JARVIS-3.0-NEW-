@@ -103,7 +103,7 @@ void main() {
       final controller = ManualTimetableController();
       controller.generateTimetable();
       final original = controller.sessions.first;
-      final moved = original.copyWith(day: 5, startMinute: 900, endMinute: 950);
+      final moved = original.copyWith(day: 5, startMinute: 810, endMinute: 860);
 
       expect(controller.editSession(moved), isTrue);
       expect(controller.hasUnsavedChanges, isTrue);

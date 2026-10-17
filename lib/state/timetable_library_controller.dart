@@ -158,13 +158,22 @@ class TimetableLibraryController extends ChangeNotifier {
   static const String demoRecordName = 'Demo timetable · local sample';
   static const String migratedRecordName = 'Migrated local timetable';
 
-  TimetableLibraryController({ManualTimetableController? workspace})
-    : workspace = workspace ?? ManualTimetableController.blank() {
+  TimetableLibraryController({ManualTimetableController? workspace, this.ownerUid})
+    : workspace = workspace ?? ManualTimetableController.blank(),
+      _preferenceKey = ownerUid == null ? storageKey : storageKeyForUser(ownerUid) {
     this.workspace.addListener(_handleWorkspaceChanged);
   }
 
   /// The one mutable workspace exposed to screens and editor actions.
   final ManualTimetableController workspace;
+  final String? ownerUid;
+  final String _preferenceKey;
+  bool _disposed = false;
+
+  static String storageKeyForUser(String uid) {
+    if (uid.isEmpty) throw ArgumentError.value(uid, 'uid', 'UID must not be empty.');
+    return '$storageKey.user.${Uri.encodeComponent(uid)}';
+  }
 
   /// Alias for callers that call the active workspace a controller.
   ManualTimetableController get controller => workspace;
@@ -206,8 +215,10 @@ class TimetableLibraryController extends ChangeNotifier {
     _suppressWorkspaceEvents = true;
     try {
       await _persistenceQueue;
+      if (_disposed) return;
       final preferences = await SharedPreferences.getInstance();
-      final rawLibrary = preferences.getString(storageKey);
+      if (_disposed) return;
+      final rawLibrary = preferences.getString(_preferenceKey);
       var loaded = false;
 
       if (rawLibrary != null && rawLibrary.trim().isNotEmpty) {
@@ -219,7 +230,7 @@ class TimetableLibraryController extends ChangeNotifier {
         }
       }
 
-      if (!loaded) {
+      if (!loaded && ownerUid == null) {
         final legacySnapshot = preferences.getString(legacyStorageKey);
         if (legacySnapshot != null && legacySnapshot.trim().isNotEmpty) {
           final migrated = _recordFromLegacySnapshot(legacySnapshot);
@@ -238,13 +249,14 @@ class TimetableLibraryController extends ChangeNotifier {
       _loadActiveWorkspace();
       await _persistNow();
     } catch (_) {
+      if (_disposed) return;
       // Opening the app must remain possible when local storage is unavailable.
       if (_records.isEmpty) _seedDemoInMemory();
       _loadActiveWorkspace();
     } finally {
       _suppressWorkspaceEvents = false;
       _isRestoring = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -419,14 +431,14 @@ class TimetableLibraryController extends ChangeNotifier {
       _loadActiveWorkspace();
       await _persistenceQueue;
       final preferences = await SharedPreferences.getInstance();
-      await preferences.remove(storageKey);
-      await preferences.remove(legacyStorageKey);
+      await preferences.remove(_preferenceKey);
+      if (ownerUid == null) await preferences.remove(legacyStorageKey);
       await _persistNow();
     } catch (_) {
       // The in-memory demo still provides a usable reset when storage fails.
     } finally {
       _suppressWorkspaceEvents = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -441,6 +453,8 @@ class TimetableLibraryController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     workspace.removeListener(_handleWorkspaceChanged);
     workspace.dispose();
     super.dispose();
@@ -629,7 +643,7 @@ class TimetableLibraryController extends ChangeNotifier {
   Future<void> _persistNow() async {
     try {
       final preferences = await SharedPreferences.getInstance();
-      await preferences.setString(storageKey, jsonEncode(_libraryMap()));
+      await preferences.setString(_preferenceKey, jsonEncode(_libraryMap()));
     } catch (_) {
       // The in-memory library remains usable when local storage is unavailable.
     }

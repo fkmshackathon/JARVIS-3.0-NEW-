@@ -7,6 +7,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Keep the released package ID. The supplied KRISHNA.COM registration cannot
+// initialize this application; add a real matching registration before use.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.synchro.synchro"
     compileSdk = flutter.compileSdkVersion

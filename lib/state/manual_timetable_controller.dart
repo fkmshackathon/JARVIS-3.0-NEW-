@@ -131,6 +131,7 @@ class ManualTimetableController extends ChangeNotifier {
   List<ManualSwapRequest> _swapRequests = <ManualSwapRequest>[];
   List<TimetableTeachingRequirement> _requirements =
       <TimetableTeachingRequirement>[];
+  List<Map<String, dynamic>> _changeAudit = <Map<String, dynamic>>[];
 
   List<ManualSession> _savedSessions = <ManualSession>[];
   List<ManualFaculty> _savedFaculty = <ManualFaculty>[];
@@ -401,6 +402,16 @@ class ManualTimetableController extends ChangeNotifier {
     }
     for (final faculty in _faculty) {
       final minutes = loadMinutes[faculty.id] ?? 0;
+      if (faculty.hardWeeklyHourLimit != null &&
+          minutes > faculty.hardWeeklyHourLimit! * 60) {
+        issues.add(
+          ManualIssue(
+            code: 'FACULTY_HARD_LOAD',
+            message:
+                '${faculty.name} has more required teaching than their hard weekly cap allows.',
+          ),
+        );
+      }
       final target = faculty.maxWeeklyHours * 60;
       if (target > 0 && minutes > target) {
         issues.add(
@@ -711,6 +722,107 @@ class ManualTimetableController extends ChangeNotifier {
 
   /// Alias for callers that prefer to name the persisted representation.
   String get serializedSnapshot => exportSnapshot();
+
+  /// Stable data-only revision used to reject stale local recommendations.
+  /// Navigation and check-state changes do not invalidate a proposal.
+  String get schedulingFingerprint {
+    final data = _draftMap();
+    for (final key in [
+      'selected_batch_id',
+      'selected_day',
+      'show_week',
+      'has_local_validation',
+      'has_unsaved_changes',
+      'setup_issues',
+      'change_audit',
+    ]) {
+      data.remove(key);
+    }
+    return jsonEncode(data);
+  }
+
+  List<Map<String, dynamic>> get changeAudit => List.unmodifiable(
+    _changeAudit.map(
+      (entry) => Map<String, dynamic>.unmodifiable(
+        {...entry}
+          ..remove('before_snapshot')
+          ..remove('after_fingerprint'),
+      ),
+    ),
+  );
+
+  /// Atomic local commit used only after the operations service validates the
+  /// complete candidate. One notification exposes the final state, not partial
+  /// faculty / room / class edits. Timetable-only undo data stays local.
+  bool commitLocalChange(
+    String snapshot, {
+    required String kind,
+    required String reason,
+    required List<String> sessionIds,
+  }) {
+    final previous = _draftMap()..remove('change_audit');
+    final history = List<Map<String, dynamic>>.from(_changeAudit);
+    final wasStale = _needsRegeneration;
+    try {
+      final decoded = jsonDecode(snapshot);
+      if (decoded is! Map ||
+          !_applySnapshotMap(
+            Map<String, dynamic>.from(decoded),
+            restoreUngeneratedSessions: true,
+          )) {
+        return false;
+      }
+      _needsRegeneration = wasStale;
+      _hasUnsavedChanges = true;
+      _hasLocalValidation = true;
+      _changeAudit = history;
+      _refreshIssues();
+      _changeAudit.add({
+        'id': 'change-${DateTime.now().microsecondsSinceEpoch}',
+        'kind': kind,
+        'reason': reason,
+        'status': 'applied',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'session_ids': List<String>.from(sessionIds),
+        'before_snapshot': jsonEncode(previous),
+        'after_fingerprint': schedulingFingerprint,
+        'before': (previous['sessions'] as List)
+            .where((s) => sessionIds.contains((s as Map)['id']))
+            .toList(),
+        'after': _sessions
+            .where((s) => sessionIds.contains(s.id))
+            .map(_sessionMap)
+            .toList(),
+      });
+      if (_changeAudit.length > 30) _changeAudit.removeAt(0);
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Undo refuses to overwrite a later edit or a different timetable draft.
+  bool undoLastLocalChange() {
+    final index = _changeAudit.lastIndexWhere(
+      (entry) => entry['status'] == 'applied',
+    );
+    if (index < 0) return false;
+    final entry = _changeAudit[index];
+    if (entry['after_fingerprint'] != schedulingFingerprint) return false;
+    final history = List<Map<String, dynamic>>.from(_changeAudit);
+    if (!importSnapshot(entry['before_snapshot'] as String)) return false;
+    history[index] = {
+      ...entry,
+      'status': 'undone',
+      'undone_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    _changeAudit = history;
+    _hasUnsavedChanges = true;
+    _refreshIssues();
+    notifyListeners();
+    return true;
+  }
 
   /// Imports a snapshot produced by [exportSnapshot]. The whole payload is
   /// decoded before it is applied; malformed or incomplete snapshots leave the
@@ -1382,6 +1494,7 @@ class ManualTimetableController extends ChangeNotifier {
 
   Map<String, dynamic> _draftMap() => <String, dynamic>{
     'version': 2,
+    'change_audit': _changeAudit,
     'institution': _institutionName,
     'semester': _semesterLabel,
     'working_days': _workingDays.toList()..sort(),
@@ -1399,6 +1512,7 @@ class ManualTimetableController extends ChangeNotifier {
     'generated': _generationResult != null,
     'needs_regeneration': _needsRegeneration,
     'has_local_validation': _hasLocalValidation,
+    'has_unsaved_changes': _hasUnsavedChanges,
     'generation_id': _generationResult?.id,
     'generation_status': _generationStatus?.name,
     'generation_message': _generationResult?.message,
@@ -1464,12 +1578,38 @@ class ManualTimetableController extends ChangeNotifier {
           map['prefer_balanced_workload'] as bool? ?? true;
       final allowCrossDepartmentSharing =
           map['allow_cross_department_sharing'] as bool? ?? true;
+      if (slotDurationMinutes <= 0 ||
+          teachingEnd <= teachingStart ||
+          teachingStart < 0 ||
+          teachingEnd > 1440 ||
+          breakEnd <= breakStart ||
+          breakStart < 0 ||
+          breakEnd > 1440) {
+        return false;
+      }
+      final requestedBatchId = map['selected_batch_id'] as String?;
+      final selectedDay = _intOr(
+        map['selected_day'],
+        0,
+      ).clamp(0, dayNames.length - 1);
+      final showWeek = map['show_week'] as bool? ?? false;
+      final scenarioLabel = map['scenario_label'] as String? ?? sampleDataLabel;
+      final hasLocalValidation = map['has_local_validation'] as bool? ?? false;
+      final hasUnsavedChanges =
+          restoreUngeneratedSessions &&
+          (map['has_unsaved_changes'] as bool? ?? false);
+      final needsRegeneration = map['needs_regeneration'] as bool? ?? false;
       final generationStatus = _decodeGenerationStatus(
         map['generation_status'],
       );
       final setupIssues = _decodeIssues(map['setup_issues']);
+      final changeAudit = (map['change_audit'] as List? ?? const [])
+          .map((e) => _map(e))
+          .toList();
       final generationIssues = _decodeIssues(map['generation_issues']);
-      final generationResult = map['generated'] == true && sessions.isNotEmpty
+      final generationResult =
+          map['generated'] == true &&
+              (restoreUngeneratedSessions || sessions.isNotEmpty)
           ? TimetableGenerationResult(
               id: map['generation_id'] as String? ?? 'restored-local-result',
               status: generationStatus ?? TimetableGenerationStatus.generated,
@@ -1508,22 +1648,19 @@ class ManualTimetableController extends ChangeNotifier {
       _allowCrossDepartmentSharing = allowCrossDepartmentSharing;
       _rebuildTimeSlots();
 
-      final requestedBatchId = map['selected_batch_id'] as String?;
       _selectedBatchId =
           requestedBatchId != null &&
               _batches.any((batch) => batch.id == requestedBatchId)
           ? requestedBatchId
           : (_batches.isEmpty ? '' : _batches.first.id);
-      _selectedDay = _intOr(
-        map['selected_day'],
-        0,
-      ).clamp(0, dayNames.length - 1);
-      _showWeek = map['show_week'] as bool? ?? false;
-      _scenarioLabel = map['scenario_label'] as String? ?? sampleDataLabel;
-      _hasUnsavedChanges = false;
-      _hasLocalValidation = map['has_local_validation'] as bool? ?? false;
-      _needsRegeneration = map['needs_regeneration'] as bool? ?? false;
+      _selectedDay = selectedDay;
+      _showWeek = showWeek;
+      _scenarioLabel = scenarioLabel;
+      _hasUnsavedChanges = hasUnsavedChanges;
+      _hasLocalValidation = hasLocalValidation;
+      _needsRegeneration = needsRegeneration;
       _setupIssues = List<ManualIssue>.from(setupIssues);
+      _changeAudit = changeAudit;
       _generationResult = generationResult;
       _generationStatus = generationResult?.status;
       _generationIssues = List<ManualIssue>.from(generationIssues);
@@ -1584,6 +1721,8 @@ class ManualTimetableController extends ChangeNotifier {
         'department': faculty.department,
         'max_weekly_hours': faculty.maxWeeklyHours,
         'is_proxy': faculty.isProxy,
+        'qualified_subject_ids': faculty.qualifiedSubjectIds,
+        'hard_weekly_hour_limit': faculty.hardWeeklyHourLimit,
         'absences': faculty.absences
             .map(
               (absence) => <String, dynamic>{
@@ -1604,6 +1743,7 @@ class ManualTimetableController extends ChangeNotifier {
     'department': room.department,
     'borrowable': room.borrowable,
     'is_available': room.isAvailable,
+    'equipment': room.equipment,
     'closures': room.unavailableSlots
         .map(
           (closure) => <String, dynamic>{
@@ -1734,6 +1874,8 @@ class ManualTimetableController extends ChangeNotifier {
           department: item['department'] as String? ?? '',
           maxWeeklyHours: _int(item['max_weekly_hours']),
           isProxy: item['is_proxy'] as bool? ?? false,
+          qualifiedSubjectIds: _stringList(item['qualified_subject_ids']),
+          hardWeeklyHourLimit: _nullableInt(item['hard_weekly_hour_limit']),
           absences: absences,
         );
       }).toList();
@@ -1767,6 +1909,7 @@ class ManualTimetableController extends ChangeNotifier {
           borrowable: item['borrowable'] as bool? ?? true,
           isAvailable: item['is_available'] as bool? ?? true,
           unavailableSlots: closures,
+          equipment: _stringList(item['equipment']),
         );
       }).toList();
     } catch (_) {
@@ -1880,7 +2023,7 @@ class ManualTimetableController extends ChangeNotifier {
     final days = _intList(value)
         .where((day) => day >= 0 && day < dayNames.length)
         .toSet();
-    return days.isEmpty ? <int>{0, 1, 2, 3, 4, 5} : days;
+    return value is List ? days : <int>{0, 1, 2, 3, 4, 5};
   }
 
   TimetableGenerationStatus? _decodeGenerationStatus(Object? value) {
@@ -2020,6 +2163,45 @@ class ManualTimetableController extends ChangeNotifier {
       final batch = _findBatch(session.batchId);
       final teacher = _findFaculty(session.facultyId);
       final practical = session.isPractical || subject?.isPractical == true;
+      if (!_workingDays.contains(session.day) ||
+          session.startMinute < _teachingStart ||
+          session.endMinute > _teachingEnd) {
+        hard.add(
+          ManualIssue(
+            code: 'TEACHING_WINDOW',
+            message:
+                'Session ${session.id} is outside the configured working days or teaching window.',
+            sessionIds: [session.id],
+          ),
+        );
+      }
+      if (_overlaps(
+        session.startMinute,
+        session.endMinute,
+        _breakStart,
+        _breakEnd,
+      )) {
+        hard.add(
+          ManualIssue(
+            code: 'MANDATORY_BREAK',
+            message: 'Session ${session.id} overlaps the mandatory break.',
+            sessionIds: [session.id],
+          ),
+        );
+      }
+      if (room != null &&
+          batch != null &&
+          room.department != batch.department &&
+          !(_allowCrossDepartmentSharing && room.borrowable)) {
+        hard.add(
+          ManualIssue(
+            code: 'ROOM_SHARING',
+            message:
+                'Session ${session.id} uses a room without cross-department permission.',
+            sessionIds: [session.id],
+          ),
+        );
+      }
       if (practical && room != null && !room.isLab) {
         hard.add(
           ManualIssue(
@@ -2119,6 +2301,21 @@ class ManualTimetableController extends ChangeNotifier {
     }
 
     final warningKeys = <String>{};
+    for (final teacher in _faculty) {
+      if (teacher.hardWeeklyHourLimit != null &&
+          workloadFor(teacher.id) > teacher.hardWeeklyHourLimit! * 60) {
+        hard.add(
+          ManualIssue(
+            code: 'FACULTY_HARD_LOAD',
+            message: '${teacher.name} exceeds the hard weekly workload limit.',
+            sessionIds: _sessions
+                .where((s) => s.facultyId == teacher.id)
+                .map((s) => s.id)
+                .toList(),
+          ),
+        );
+      }
+    }
     for (var left = 0; left < _sessions.length; left++) {
       final first = _sessions[left];
       for (var right = left + 1; right < _sessions.length; right++) {
@@ -2234,6 +2431,7 @@ class ManualTimetableController extends ChangeNotifier {
       '${(minutes / 60).toStringAsFixed(minutes % 60 == 0 ? 0 : 1)} h';
 
   void _seedDemoData() {
+    _changeAudit = [];
     _faculty = const <ManualFaculty>[
       ManualFaculty(
         id: 'faculty-kavita',
