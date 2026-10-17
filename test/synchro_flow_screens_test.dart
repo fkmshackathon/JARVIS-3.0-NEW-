@@ -28,7 +28,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Northstar Institute of Technology'), findsOneWidget);
+    expect(find.text('SHREE LR TIWARI COLLEGE OF ENGINEERING'), findsOneWidget);
     expect(find.text('Semester 2 · 2026'), findsWidgets);
 
     await tester.scrollUntilVisible(

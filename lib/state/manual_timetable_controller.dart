@@ -18,7 +18,7 @@ export 'timetable_generator.dart';
 class ManualTimetableController extends ChangeNotifier {
   static const String _storageKey = 'synchro.workspace.v2';
 
-  static const String defaultInstitution = 'Northstar Institute of Technology';
+  static const String defaultInstitution = 'SHREE LR TIWARI COLLEGE OF ENGINEERING';
   static const String defaultSemester = 'Semester 2 · 2026';
 
   ManualTimetableController({

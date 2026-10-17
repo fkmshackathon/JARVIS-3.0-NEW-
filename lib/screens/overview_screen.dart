@@ -7,7 +7,7 @@ import '../theme/tokens.dart';
 import '../widgets/ui.dart';
 import 'synchro_flow_widgets.dart';
 
-const String synchroDefaultInstitution = 'Northstar Institute of Technology';
+const String synchroDefaultInstitution = 'SHREE LR TIWARI COLLEGE OF ENGINEERING';
 const String synchroDefaultSemester = 'Semester 2 · 2026';
 
 /// The first surface in the focused SYNCHRO flow.
