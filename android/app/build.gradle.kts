@@ -45,10 +45,22 @@ android {
             val storeFileProp = keystoreProperties.getProperty("storeFile") ?: System.getenv("STORE_FILE")
             val storePasswordProp = keystoreProperties.getProperty("storePassword") ?: System.getenv("STORE_PASSWORD")
 
-            if (storeFileProp != null && keyAliasProp != null && file(storeFileProp).exists()) {
+            val resolvedStoreFile = if (!storeFileProp.isNullOrEmpty()) {
+                val f1 = file(storeFileProp)
+                val f2 = rootProject.file(storeFileProp)
+                val f3 = rootProject.file("app/$storeFileProp")
+                when {
+                    f1.exists() -> f1
+                    f2.exists() -> f2
+                    f3.exists() -> f3
+                    else -> null
+                }
+            } else null
+
+            if (resolvedStoreFile != null && !keyAliasProp.isNullOrEmpty()) {
                 keyAlias = keyAliasProp
                 keyPassword = keyPasswordProp
-                storeFile = file(storeFileProp)
+                storeFile = resolvedStoreFile
                 storePassword = storePasswordProp
             } else {
                 initWith(signingConfigs.getByName("debug"))

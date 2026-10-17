@@ -70,6 +70,29 @@ jobs:
       - name: Run Flutter test suite
         run: flutter test
 
+      - name: Configure Android Keystores
+        run: |
+          mkdir -p ~/.android ~/.config/.android android/app
+          keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" || true
+          cp ~/.android/debug.keystore ~/.config/.android/debug.keystore || true
+
+          keytool -genkeypair -v \
+            -keystore android/app/release.keystore \
+            -storepass synchro123 \
+            -alias synchro \
+            -keypass synchro123 \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=JARVIS 3.0, OU=SYNCHRO, O=FKMS, L=Global, S=Global, C=US"
+
+          cat <<EOF > android/key.properties
+          storePassword=synchro123
+          keyPassword=synchro123
+          keyAlias=synchro
+          storeFile=release.keystore
+          EOF
+
       - name: Build Android Release APK
         env:
           SYNCHRO_API_URL: ${{ secrets.SYNCHRO_API_URL }}
