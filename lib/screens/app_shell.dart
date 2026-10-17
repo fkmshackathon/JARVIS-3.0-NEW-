@@ -12,18 +12,16 @@ import 'manual_workload_screen.dart';
 import 'generate_timetable_screen.dart';
 import 'overview_screen.dart';
 import 'setup_screen.dart';
+import 'timetable_library_screen.dart';
+import '../state/timetable_library_controller.dart';
 
 /// The compact product shell for the local timetable workspace. Home is the
 /// starting point; issues, workload, rooms, and change handling stay one tap
 /// away without adding redundant primary tabs.
 class AppShell extends StatefulWidget {
-  const AppShell({
-    super.key,
-    required this.controller,
-    required this.onSignOut,
-  });
+  const AppShell({super.key, required this.library, required this.onSignOut});
 
-  final ManualTimetableController controller;
+  final TimetableLibraryController library;
   final VoidCallback onSignOut;
 
   @override
@@ -33,7 +31,8 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
 
-  ManualTimetableController get _manualController => widget.controller;
+  TimetableLibraryController get _library => widget.library;
+  ManualTimetableController get _manualController => _library.workspace;
 
   static const List<_Destination> _destinations = [
     _Destination('Overview', Icons.home_outlined, Icons.home),
@@ -50,7 +49,7 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: ListenableBuilder(
-        listenable: _manualController,
+        listenable: _library,
         builder: (context, _) => SafeArea(
           bottom: false,
           child: Column(
@@ -59,6 +58,8 @@ class _AppShellState extends State<AppShell> {
                 _ShellHeader(
                   index: _index,
                   manualController: _manualController,
+                  timetableName: _library.activeRecord?.name,
+                  timetableTerm: _library.activeRecord?.term,
                   onSignOut: widget.onSignOut,
                 ),
               Expanded(
@@ -107,8 +108,10 @@ class _AppShellState extends State<AppShell> {
       onReview: () => _selectDestination(2),
       onOpenWorkload: _openWorkload,
       onOpenRooms: _openRooms,
+      timetableLibrary: _library,
+      onOpenLibrary: _openLibrary,
       onSignOut: widget.onSignOut,
-      onReset: () {},
+      onReset: _resetDemo,
     ),
     1 => SetupScreen(
       controller: _manualController,
@@ -119,7 +122,7 @@ class _AppShellState extends State<AppShell> {
       onReview: () => _selectDestination(2),
       onOpenWorkload: _openWorkload,
       onOpenRooms: _openRooms,
-      onReset: () {},
+      onReset: _resetDemo,
     ),
     2 => GenerateTimetableScreen(
       controller: _manualController,
@@ -128,6 +131,7 @@ class _AppShellState extends State<AppShell> {
       onOpenRooms: _openRooms,
       onHandleChange: _openRefine,
       onOpenIssues: _openIssues,
+      onOpenLibrary: _openLibrary,
     ),
     _ => _IssuesDestination(manualController: _manualController),
   };
@@ -199,6 +203,18 @@ class _AppShellState extends State<AppShell> {
       ),
     );
   }
+
+  Future<void> _openLibrary() async {
+    final next = await Navigator.of(context).push<TimetableLibraryNext>(
+      MaterialPageRoute<TimetableLibraryNext>(
+        builder: (_) => TimetableLibraryScreen(library: _library),
+      ),
+    );
+    if (!mounted || next != TimetableLibraryNext.setup) return;
+    _selectDestination(1);
+  }
+
+  Future<void> _resetDemo() => _library.resetDemo();
 }
 
 class _Destination {
@@ -224,11 +240,15 @@ class _ShellHeader extends StatelessWidget {
   const _ShellHeader({
     required this.index,
     required this.manualController,
+    this.timetableName,
+    this.timetableTerm,
     required this.onSignOut,
   });
 
   final int index;
   final ManualTimetableController manualController;
+  final String? timetableName;
+  final String? timetableTerm;
   final VoidCallback onSignOut;
 
   @override
@@ -266,12 +286,22 @@ class _ShellHeader extends StatelessWidget {
                       ?.copyWith(color: SynchroColors.onNavy),
                 ),
                 Text(
-                  manualController.dataLabel,
+                  timetableName?.trim().isNotEmpty == true
+                      ? timetableName!
+                      : manualController.dataLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: SynchroColors.onNavyMuted),
                 ),
+                if (timetableTerm?.trim().isNotEmpty == true)
+                  Text(
+                    timetableTerm!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: SynchroColors.onNavyMuted),
+                  ),
               ],
             ),
           ),

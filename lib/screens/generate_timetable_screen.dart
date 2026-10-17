@@ -16,6 +16,7 @@ class GenerateTimetableScreen extends StatelessWidget {
     this.onOpenRooms,
     this.onHandleChange,
     this.onOpenIssues,
+    this.onOpenLibrary,
   });
 
   final ManualTimetableController controller;
@@ -24,6 +25,7 @@ class GenerateTimetableScreen extends StatelessWidget {
   final VoidCallback? onOpenRooms;
   final VoidCallback? onHandleChange;
   final VoidCallback? onOpenIssues;
+  final VoidCallback? onOpenLibrary;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -34,6 +36,7 @@ class GenerateTimetableScreen extends StatelessWidget {
           controller: controller,
           onOpenSetup: onOpenSetup,
           onGenerate: () => _generate(context),
+          onOpenLibrary: onOpenLibrary,
         );
       }
 
@@ -44,6 +47,7 @@ class GenerateTimetableScreen extends StatelessWidget {
               controller: controller,
               onGenerate: () => _generate(context),
               onOpenIssues: onOpenIssues,
+              onOpenLibrary: onOpenLibrary,
             ),
             Expanded(
               child: controller.sessions.isEmpty
@@ -96,11 +100,13 @@ class _GenerationLanding extends StatelessWidget {
     required this.controller,
     this.onOpenSetup,
     required this.onGenerate,
+    this.onOpenLibrary,
   });
 
   final ManualTimetableController controller;
   final VoidCallback? onOpenSetup;
   final VoidCallback onGenerate;
+  final VoidCallback? onOpenLibrary;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -196,6 +202,14 @@ class _GenerationLanding extends StatelessWidget {
                       : SynchroColors.onNavy,
                 ),
               ),
+              if (onOpenLibrary != null) ...[
+                const SizedBox(height: SynchroSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: onOpenLibrary,
+                  icon: const Icon(Icons.folder_open_outlined, size: 18),
+                  label: const Text('My timetables'),
+                ),
+              ],
               const SizedBox(height: SynchroSpacing.sm),
               Text(
                 'Status: not generated',
@@ -215,11 +229,13 @@ class _GenerationOutcome extends StatelessWidget {
     required this.controller,
     required this.onGenerate,
     this.onOpenIssues,
+    this.onOpenLibrary,
   });
 
   final ManualTimetableController controller;
   final VoidCallback onGenerate;
   final VoidCallback? onOpenIssues;
+  final VoidCallback? onOpenLibrary;
 
   @override
   Widget build(BuildContext context) {
@@ -259,6 +275,12 @@ class _GenerationOutcome extends StatelessWidget {
             ),
             if (onOpenIssues != null && controller.issues.isNotEmpty)
               TextButton(onPressed: onOpenIssues, child: const Text('Issues')),
+            if (onOpenLibrary != null)
+              IconButton(
+                tooltip: 'My timetables',
+                onPressed: onOpenLibrary,
+                icon: const Icon(Icons.folder_open_outlined),
+              ),
             IconButton(
               tooltip: needsRegeneration
                   ? 'Regenerate timetable'

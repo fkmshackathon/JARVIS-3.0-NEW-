@@ -50,6 +50,42 @@ void main() {
     },
   );
 
+  testWidgets('opens the timetable library from Overview without a new tab', (
+    tester,
+  ) async {
+    _phone(tester);
+    await _bootSignedIn(tester);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('open-timetable-library-button')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(
+      find.byKey(const Key('open-timetable-library-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('open-timetable-library-button')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('open-timetable-library-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('My timetables'), findsOneWidget);
+    expect(find.byKey(const Key('create-timetable-button')), findsOneWidget);
+    expect(find.text('Demo timetable · local sample'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Your scheduling workspace'),
+      -200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Your scheduling workspace'), findsOneWidget);
+  });
+
   testWidgets('signing out and back in preserves the local timetable draft', (
     tester,
   ) async {

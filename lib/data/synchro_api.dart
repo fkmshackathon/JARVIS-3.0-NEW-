@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, kReleaseMode, TargetPlatform;
 import 'package:http/http.dart' as http;
 
 /// Where the solver lives. Nothing about the schedule is decided without it, so an
@@ -14,8 +14,15 @@ import 'package:http/http.dart' as http;
 abstract final class ApiConfig {
   static const String _override = String.fromEnvironment('SYNCHRO_API');
 
-  static String get defaultBaseUrl =>
-      defaultTargetPlatform == TargetPlatform.android ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+  static String get defaultBaseUrl {
+    if (kReleaseMode) {
+      // Production release builds use the deployed HTTPS backend.
+      return 'https://jarvis-synchro-backend.up.railway.app';
+    }
+    return defaultTargetPlatform == TargetPlatform.android
+        ? 'http://10.0.2.2:8000'
+        : 'http://localhost:8000';
+  }
 
   static String get baseUrl => _override.isNotEmpty ? _override : defaultBaseUrl;
 

@@ -1,0 +1,120 @@
+name: Android Release & CI
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish GitHub Release'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  backend-test:
+    name: Backend Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run backend pytest
+        run: |
+          pytest backend
+
+  build-and-release-android:
+    name: Build & Package Android APK
+    runs-on: ubuntu-latest
+    needs: [backend-test]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Verify static analysis
+        run: flutter analyze
+
+      - name: Run Flutter test suite
+        run: flutter test
+
+      - name: Build Android Release APK
+        env:
+          SYNCHRO_API_URL: ${{ secrets.SYNCHRO_API_URL }}
+        run: |
+          API_URL="${SYNCHRO_API_URL:-https://jarvis-synchro-backend.up.railway.app}"
+          flutter build apk --release --dart-define=SYNCHRO_API="$API_URL"
+
+      - name: Package Release APK
+        run: |
+          mkdir -p release-output
+          cp build/app/outputs/flutter-apk/app-release.apk release-output/JARVIS-3.0-v1.0.0.apk
+          sha256sum release-output/JARVIS-3.0-v1.0.0.apk > release-output/JARVIS-3.0-v1.0.0.apk.sha256
+          echo "Release APK and SHA256 checksum created."
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JARVIS-3.0-v1.0.0.apk
+          path: release-output/JARVIS-3.0-v1.0.0.apk
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true') || github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.0' }}
+          name: JARVIS 3.0 v1.0.0 Android Release
+          body: |
+            ## JARVIS 3.0 (SYNCHRO) — Android Production Release v1.0.0
+
+            ### 🚀 Direct Download
+            Download the official Android APK:
+            - **[JARVIS-3.0-v1.0.0.apk](https://github.com/fkmshackathon/JARVIS-3.0-NEW-/releases/latest/download/JARVIS-3.0-v1.0.0.apk)**
+
+            ### 📱 Verification & Requirements
+            - **Target Android Version:** Android 8.0+ (API level 26+)
+            - **SHA-256 Checksum:** See attached `JARVIS-3.0-v1.0.0.apk.sha256`
+
+            ### ✨ What's Included
+            - Complete offline-first timetable generation and editing engine
+            - Multi-timetable library management with persistent local storage
+            - Conflict checking, workload visualization, and term rhythm setup
+            - Compatible with both local standalone mode and deployed FastAPI solver backend
+          files: |
+            release-output/JARVIS-3.0-v1.0.0.apk
+            release-output/JARVIS-3.0-v1.0.0.apk.sha256
+          draft: false
+          prerelease: false

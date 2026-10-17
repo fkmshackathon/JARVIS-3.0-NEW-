@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'screens/access_screen.dart';
 import 'screens/app_shell.dart';
 import 'state/demo_session.dart';
-import 'state/manual_timetable_controller.dart';
+import 'state/timetable_library_controller.dart';
 import 'theme/synchro_theme.dart';
 import 'theme/theme_controller.dart';
 import 'widgets/app_frame.dart';
@@ -21,17 +21,17 @@ class SynchroApp extends StatefulWidget {
 
 class _SynchroAppState extends State<SynchroApp> {
   final DemoSession _session = DemoSession();
-  final ManualTimetableController _controller = ManualTimetableController();
+  final TimetableLibraryController _library = TimetableLibraryController();
 
   @override
   void initState() {
     super.initState();
-    _controller.restoreDraft();
+    _library.restore();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _library.dispose();
     _session.dispose();
     super.dispose();
   }
@@ -51,7 +51,7 @@ class _SynchroAppState extends State<SynchroApp> {
         home: ListenableBuilder(
           listenable: _session,
           builder: (context, _) => _session.isSignedIn
-              ? AppShell(controller: _controller, onSignOut: _session.signOut)
+              ? AppShell(library: _library, onSignOut: _session.signOut)
               : AccessScreen(session: _session, onAuthenticated: () {}),
         ),
       ),

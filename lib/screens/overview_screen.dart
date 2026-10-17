@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../brand/synchro_mark.dart';
 import '../state/manual_timetable_controller.dart';
+import '../state/timetable_library_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
 import 'synchro_flow_widgets.dart';
@@ -25,6 +26,8 @@ class OverviewScreen extends StatelessWidget {
     this.onReview,
     this.onOpenWorkload,
     this.onOpenRooms,
+    this.timetableLibrary,
+    this.onOpenLibrary,
     this.onSignOut,
     this.onReset,
   });
@@ -43,10 +46,12 @@ class OverviewScreen extends StatelessWidget {
   final VoidCallback? onReview;
   final VoidCallback? onOpenWorkload;
   final VoidCallback? onOpenRooms;
+  final TimetableLibraryController? timetableLibrary;
+  final VoidCallback? onOpenLibrary;
   final VoidCallback? onSignOut;
 
-  /// Called after the local demo draft has been reset.
-  final VoidCallback? onReset;
+  /// Resets the complete local timetable library after confirmation.
+  final Future<void> Function()? onReset;
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +97,13 @@ class OverviewScreen extends StatelessWidget {
                       institutionName: institutionName,
                       semesterLabel: semesterLabel,
                     ),
+                    if (timetableLibrary != null && onOpenLibrary != null) ...[
+                      const SizedBox(height: 16),
+                      _TimetableLibraryCard(
+                        library: timetableLibrary!,
+                        onOpenLibrary: onOpenLibrary!,
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     _CollectionMetrics(
                       controller: controller,
@@ -162,12 +174,115 @@ class OverviewScreen extends StatelessWidget {
       ),
     );
     if (shouldReset != true) return;
-    await controller.resetDemo();
-    onReset?.call();
+    if (onReset != null) {
+      await onReset!();
+    } else {
+      await controller.resetDemo();
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Local demo restored.')));
   }
+}
+
+class _TimetableLibraryCard extends StatelessWidget {
+  const _TimetableLibraryCard({
+    required this.library,
+    required this.onOpenLibrary,
+  });
+
+  final TimetableLibraryController library;
+  final VoidCallback onOpenLibrary;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = library.activeRecord;
+    final records = library.records;
+    final status = active?.status ?? TimetableRecordStatus.notGenerated;
+    final tone = switch (status) {
+      TimetableRecordStatus.validated => Tone.good,
+      TimetableRecordStatus.needsReview => Tone.warn,
+      TimetableRecordStatus.draft => Tone.neutral,
+      TimetableRecordStatus.notGenerated => Tone.neutral,
+    };
+
+    return SectionCard(
+      overline: 'MY TIMETABLES',
+      title: records.isEmpty
+          ? 'No saved timetables'
+          : '${records.length} saved timetable${records.length == 1 ? '' : 's'}',
+      trailing: StatusChip(
+        label: active == null ? 'None open' : '1 open',
+        tone: tone,
+        icon: Icons.calendar_today_outlined,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (active == null)
+            const Text(
+              'Create a timetable to start an independent local draft.',
+            )
+          else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.calendar_month_outlined, size: 21),
+                const SizedBox(width: SynchroSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        active.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: SynchroSpacing.xs),
+                      Text(
+                        '${active.term} · ${active.sessionCount} session${active.sessionCount == 1 ? '' : 's'}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: SynchroSpacing.sm),
+                StatusChip(label: active.statusLabel, tone: tone),
+              ],
+            ),
+            const SizedBox(height: SynchroSpacing.xs),
+            Text(
+              'Updated ${_libraryTime(active.updatedAt)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (records.length > 1) ...[
+              const SizedBox(height: SynchroSpacing.xs),
+              Text(
+                '${records.length - 1} other timetable${records.length == 2 ? '' : 's'} saved locally.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
+          const SizedBox(height: SynchroSpacing.md),
+          OutlinedButton.icon(
+            key: const Key('open-timetable-library-button'),
+            onPressed: onOpenLibrary,
+            icon: const Icon(Icons.folder_open_outlined, size: 18),
+            label: const Text('Open My timetables'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _libraryTime(DateTime value) {
+  final local = value.toLocal();
+  final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final meridiem = local.hour >= 12 ? 'PM' : 'AM';
+  return '$hour:$minute $meridiem';
 }
 
 class _OverviewTopbar extends StatelessWidget {

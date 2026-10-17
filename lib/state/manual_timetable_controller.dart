@@ -27,8 +27,50 @@ class ManualTimetableController extends ChangeNotifier {
     List<ManualRoom>? rooms,
     List<ManualSubject>? subjects,
     List<ManualBatch>? batches,
+  }) : _initialSeedDemo = true {
+    _initialize(
+      sessions: sessions,
+      faculty: faculty,
+      rooms: rooms,
+      subjects: subjects,
+      batches: batches,
+    );
+  }
+
+  /// Creates an empty local workspace. The regular constructor intentionally
+  /// keeps its demo setup for existing callers; library records use this path
+  /// when they need a genuinely blank timetable.
+  ManualTimetableController.blank({
+    List<ManualSession>? sessions,
+    List<ManualFaculty>? faculty,
+    List<ManualRoom>? rooms,
+    List<ManualSubject>? subjects,
+    List<ManualBatch>? batches,
+  }) : _initialSeedDemo = false {
+    _initialize(
+      sessions: sessions,
+      faculty: faculty,
+      rooms: rooms,
+      subjects: subjects,
+      batches: batches,
+    );
+  }
+
+  final bool _initialSeedDemo;
+
+  void _initialize({
+    List<ManualSession>? sessions,
+    List<ManualFaculty>? faculty,
+    List<ManualRoom>? rooms,
+    List<ManualSubject>? subjects,
+    List<ManualBatch>? batches,
   }) {
-    _seedDemoData();
+    if (_initialSeedDemo) {
+      _seedDemoData();
+    } else {
+      _scenarioLabel = blankDataLabel;
+      _rebuildTimeSlots();
+    }
     if (sessions != null) _sessions = List<ManualSession>.from(sessions);
     if (faculty != null) _faculty = List<ManualFaculty>.from(faculty);
     if (rooms != null) _rooms = List<ManualRoom>.from(rooms);
@@ -44,12 +86,7 @@ class ManualTimetableController extends ChangeNotifier {
     _savedSubjects = List<ManualSubject>.from(_subjects);
     _savedBatches = List<ManualBatch>.from(_batches);
     _savedRequirements = List<TimetableTeachingRequirement>.from(_requirements);
-    _savedInstitutionName = _institutionName;
-    _savedSemesterLabel = _semesterLabel;
-    _savedWorkingDays = Set<int>.from(_workingDays);
-    _savedBreakStart = _breakStart;
-    _savedBreakEnd = _breakEnd;
-    _savedBreakLabel = _breakLabel;
+    _savedScenarioLabel = _scenarioLabel;
     _savedInstitutionName = _institutionName;
     _savedSemesterLabel = _semesterLabel;
     _savedWorkingDays = Set<int>.from(_workingDays);
@@ -71,6 +108,7 @@ class ManualTimetableController extends ChangeNotifier {
   }
 
   static const String sampleDataLabel = 'DEMO SAMPLE · LOCAL DRAFT ONLY';
+  static const String blankDataLabel = 'BLANK LOCAL DRAFT';
   static const String conflictScenarioLabel = 'CONFLICT SCENARIO · LOCAL DEMO';
   static const List<String> dayNames = <String>[
     'Monday',
@@ -654,114 +692,42 @@ class ManualTimetableController extends ChangeNotifier {
       if (raw == null || raw.trim().isEmpty) return;
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return;
-      final map = Map<String, dynamic>.from(decoded);
-      final sessions = _decodeSessions(map['sessions']);
-      final faculty = _decodeFaculty(map['faculty']);
-      final rooms = _decodeRooms(map['rooms']);
-      final subjects = _decodeSubjects(map['subjects']);
-      final batches = _decodeBatches(map['batches']);
-      final requirements = _decodeRequirements(map['requirements']);
-      final swaps = _decodeSwaps(map['swaps']);
-      if (sessions == null ||
-          faculty == null ||
-          rooms == null ||
-          subjects == null ||
-          batches == null ||
-          requirements == null ||
-          swaps == null) {
-        return;
-      }
-      _sessions = map['generated'] == true ? sessions : <ManualSession>[];
-      _faculty = faculty;
-      _rooms = rooms;
-      _subjects = subjects;
-      _batches = batches;
-      _requirements = requirements;
-      _swapRequests = swaps;
-      _savedSessions = List<ManualSession>.from(_sessions);
-      _savedFaculty = List<ManualFaculty>.from(_faculty);
-      _savedRooms = List<ManualRoom>.from(_rooms);
-      _savedSwapRequests = List<ManualSwapRequest>.from(_swapRequests);
-      _savedSubjects = List<ManualSubject>.from(_subjects);
-      _savedBatches = List<ManualBatch>.from(_batches);
-      _savedRequirements = List<TimetableTeachingRequirement>.from(
-        _requirements,
+      _applySnapshotMap(
+        Map<String, dynamic>.from(decoded),
+        restoreUngeneratedSessions: false,
       );
-      _institutionName = map['institution'] as String? ?? defaultInstitution;
-      _semesterLabel = map['semester'] as String? ?? defaultSemester;
-      _workingDays = _decodeWorkingDays(map['working_days']);
-      _breakStart = _intOr(map['break_start'], 720);
-      _breakEnd = _intOr(map['break_end'], 750);
-      _breakLabel = map['break_label'] as String? ?? 'Lunch break';
-      _teachingStart = _intOr(map['teaching_start'], 540);
-      _teachingEnd = _intOr(map['teaching_end'], 920);
-      _slotDurationMinutes = _intOr(map['slot_duration'], 50);
-      _allowStaggeredStartTimes =
-          map['allow_staggered_start_times'] as bool? ?? true;
-      _avoidBackToBack = map['avoid_back_to_back'] as bool? ?? true;
-      _preferBalancedWorkload =
-          map['prefer_balanced_workload'] as bool? ?? true;
-      _allowCrossDepartmentSharing =
-          map['allow_cross_department_sharing'] as bool? ?? true;
-      _rebuildTimeSlots();
-      _selectedBatchId =
-          _batches.any((batch) => batch.id == map['selected_batch_id'])
-          ? map['selected_batch_id'] as String
-          : _selectedBatchId;
-      _selectedDay = (map['selected_day'] as int? ?? 0).clamp(
-        0,
-        dayNames.length - 1,
-      );
-      _showWeek = map['show_week'] as bool? ?? false;
-      _scenarioLabel = map['scenario_label'] as String? ?? sampleDataLabel;
-      _savedScenarioLabel = _scenarioLabel;
-      _hasUnsavedChanges = false;
-      _hasLocalValidation = map['has_local_validation'] as bool? ?? false;
-      _needsRegeneration = map['needs_regeneration'] as bool? ?? false;
-      _generationStatus = _decodeGenerationStatus(map['generation_status']);
-      _generationIssues = _decodeIssues(map['generation_issues']);
-      if (map['generated'] == true && _sessions.isNotEmpty) {
-        _generationResult = TimetableGenerationResult(
-          id: map['generation_id'] as String? ?? 'restored-local-result',
-          status: _generationStatus ?? TimetableGenerationStatus.generated,
-          message:
-              map['generation_message'] as String? ??
-              'Restored local timetable draft.',
-          generatedSessions: _sessions,
-          unassignedRequirements: _decodeUnassigned(
-            map['unassigned_requirements'],
-          ),
-          validationIssues: _generationIssues,
-          score: _intOr(map['generation_score'], 0),
-          searchNodes: _intOr(map['generation_nodes'], 0),
-        );
-      } else {
-        _generationResult = null;
-        _generationStatus = null;
-      }
-      _savedInstitutionName = _institutionName;
-      _savedSemesterLabel = _semesterLabel;
-      _savedWorkingDays = Set<int>.from(_workingDays);
-      _savedBreakStart = _breakStart;
-      _savedBreakEnd = _breakEnd;
-      _savedBreakLabel = _breakLabel;
-      _savedTeachingStart = _teachingStart;
-      _savedTeachingEnd = _teachingEnd;
-      _savedSlotDurationMinutes = _slotDurationMinutes;
-      _savedAllowStaggeredStartTimes = _allowStaggeredStartTimes;
-      _savedAvoidBackToBack = _avoidBackToBack;
-      _savedPreferBalancedWorkload = _preferBalancedWorkload;
-      _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
-      _savedGenerationResult = _generationResult;
-      _savedGenerationStatus = _generationStatus;
-      _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
-      _savedNeedsRegeneration = _needsRegeneration;
-      _refreshIssues();
     } catch (_) {
       // A broken local payload must never prevent the app from opening.
     } finally {
       _isRestoring = false;
       notifyListeners();
+    }
+  }
+
+  /// Serializes every local field needed to reopen this workspace. The result
+  /// is JSON rather than a live map, so callers cannot mutate controller state
+  /// through a shared collection reference.
+  String exportSnapshot() => jsonEncode(_draftMap());
+
+  /// Alias for callers that prefer to name the persisted representation.
+  String get serializedSnapshot => exportSnapshot();
+
+  /// Imports a snapshot produced by [exportSnapshot]. The whole payload is
+  /// decoded before it is applied; malformed or incomplete snapshots leave the
+  /// current workspace untouched and return `false`.
+  bool importSnapshot(String serializedSnapshot) {
+    try {
+      final decoded = jsonDecode(serializedSnapshot);
+      if (decoded is! Map) return false;
+      final applied = _applySnapshotMap(
+        Map<String, dynamic>.from(decoded),
+        restoreUngeneratedSessions: true,
+      );
+      if (!applied) return false;
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -1447,6 +1413,7 @@ class ManualTimetableController extends ChangeNotifier {
     'subjects': _subjects.map(_subjectMap).toList(),
     'batches': _batches.map(_batchMap).toList(),
     'requirements': _requirements.map(_requirementMap).toList(),
+    'setup_issues': _setupIssues.map(_issueMap).toList(),
     'generation_issues': _generationIssues.map(_issueMap).toList(),
     'unassigned_requirements':
         (_generationResult?.unassignedRequirements ??
@@ -1455,6 +1422,146 @@ class ManualTimetableController extends ChangeNotifier {
             .toList(),
     'swaps': _swapRequests.map(_swapMap).toList(),
   };
+
+  bool _applySnapshotMap(
+    Map<String, dynamic> map, {
+    required bool restoreUngeneratedSessions,
+  }) {
+    try {
+      final decodedSessions = _decodeSessions(map['sessions']);
+      final faculty = _decodeFaculty(map['faculty']);
+      final rooms = _decodeRooms(map['rooms']);
+      final subjects = _decodeSubjects(map['subjects']);
+      final batches = _decodeBatches(map['batches']);
+      final requirements = _decodeRequirements(map['requirements']);
+      final swaps = _decodeSwaps(map['swaps']);
+      if (decodedSessions == null ||
+          faculty == null ||
+          rooms == null ||
+          subjects == null ||
+          batches == null ||
+          requirements == null ||
+          swaps == null) {
+        return false;
+      }
+
+      final sessions = map['generated'] == true || restoreUngeneratedSessions
+          ? decodedSessions
+          : <ManualSession>[];
+      final institution = map['institution'] as String? ?? defaultInstitution;
+      final semester = map['semester'] as String? ?? defaultSemester;
+      final workingDays = _decodeWorkingDays(map['working_days']);
+      final breakStart = _intOr(map['break_start'], 720);
+      final breakEnd = _intOr(map['break_end'], 750);
+      final breakLabel = map['break_label'] as String? ?? 'Lunch break';
+      final teachingStart = _intOr(map['teaching_start'], 540);
+      final teachingEnd = _intOr(map['teaching_end'], 920);
+      final slotDurationMinutes = _intOr(map['slot_duration'], 50);
+      final allowStaggeredStartTimes =
+          map['allow_staggered_start_times'] as bool? ?? true;
+      final avoidBackToBack = map['avoid_back_to_back'] as bool? ?? true;
+      final preferBalancedWorkload =
+          map['prefer_balanced_workload'] as bool? ?? true;
+      final allowCrossDepartmentSharing =
+          map['allow_cross_department_sharing'] as bool? ?? true;
+      final generationStatus = _decodeGenerationStatus(
+        map['generation_status'],
+      );
+      final setupIssues = _decodeIssues(map['setup_issues']);
+      final generationIssues = _decodeIssues(map['generation_issues']);
+      final generationResult = map['generated'] == true && sessions.isNotEmpty
+          ? TimetableGenerationResult(
+              id: map['generation_id'] as String? ?? 'restored-local-result',
+              status: generationStatus ?? TimetableGenerationStatus.generated,
+              message:
+                  map['generation_message'] as String? ??
+                  'Restored local timetable draft.',
+              generatedSessions: sessions,
+              unassignedRequirements: _decodeUnassigned(
+                map['unassigned_requirements'],
+              ),
+              validationIssues: generationIssues,
+              score: _intOr(map['generation_score'], 0),
+              searchNodes: _intOr(map['generation_nodes'], 0),
+            )
+          : null;
+
+      _sessions = List<ManualSession>.from(sessions);
+      _faculty = List<ManualFaculty>.from(faculty);
+      _rooms = List<ManualRoom>.from(rooms);
+      _subjects = List<ManualSubject>.from(subjects);
+      _batches = List<ManualBatch>.from(batches);
+      _requirements = List<TimetableTeachingRequirement>.from(requirements);
+      _swapRequests = List<ManualSwapRequest>.from(swaps);
+      _institutionName = institution;
+      _semesterLabel = semester;
+      _workingDays = workingDays;
+      _breakStart = breakStart;
+      _breakEnd = breakEnd;
+      _breakLabel = breakLabel;
+      _teachingStart = teachingStart;
+      _teachingEnd = teachingEnd;
+      _slotDurationMinutes = slotDurationMinutes;
+      _allowStaggeredStartTimes = allowStaggeredStartTimes;
+      _avoidBackToBack = avoidBackToBack;
+      _preferBalancedWorkload = preferBalancedWorkload;
+      _allowCrossDepartmentSharing = allowCrossDepartmentSharing;
+      _rebuildTimeSlots();
+
+      final requestedBatchId = map['selected_batch_id'] as String?;
+      _selectedBatchId =
+          requestedBatchId != null &&
+              _batches.any((batch) => batch.id == requestedBatchId)
+          ? requestedBatchId
+          : (_batches.isEmpty ? '' : _batches.first.id);
+      _selectedDay = _intOr(
+        map['selected_day'],
+        0,
+      ).clamp(0, dayNames.length - 1);
+      _showWeek = map['show_week'] as bool? ?? false;
+      _scenarioLabel = map['scenario_label'] as String? ?? sampleDataLabel;
+      _hasUnsavedChanges = false;
+      _hasLocalValidation = map['has_local_validation'] as bool? ?? false;
+      _needsRegeneration = map['needs_regeneration'] as bool? ?? false;
+      _setupIssues = List<ManualIssue>.from(setupIssues);
+      _generationResult = generationResult;
+      _generationStatus = generationResult?.status;
+      _generationIssues = List<ManualIssue>.from(generationIssues);
+
+      _savedSessions = List<ManualSession>.from(_sessions);
+      _savedFaculty = List<ManualFaculty>.from(_faculty);
+      _savedRooms = List<ManualRoom>.from(_rooms);
+      _savedSwapRequests = List<ManualSwapRequest>.from(_swapRequests);
+      _savedSubjects = List<ManualSubject>.from(_subjects);
+      _savedBatches = List<ManualBatch>.from(_batches);
+      _savedRequirements = List<TimetableTeachingRequirement>.from(
+        _requirements,
+      );
+      _savedScenarioLabel = _scenarioLabel;
+      _savedInstitutionName = _institutionName;
+      _savedSemesterLabel = _semesterLabel;
+      _savedWorkingDays = Set<int>.from(_workingDays);
+      _savedBreakStart = _breakStart;
+      _savedBreakEnd = _breakEnd;
+      _savedBreakLabel = _breakLabel;
+      _savedTeachingStart = _teachingStart;
+      _savedTeachingEnd = _teachingEnd;
+      _savedSlotDurationMinutes = _slotDurationMinutes;
+      _savedAllowStaggeredStartTimes = _allowStaggeredStartTimes;
+      _savedAvoidBackToBack = _avoidBackToBack;
+      _savedPreferBalancedWorkload = _preferBalancedWorkload;
+      _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
+      _savedGenerationResult = _generationResult;
+      _savedGenerationStatus = _generationStatus;
+      _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
+      _savedNeedsRegeneration = _needsRegeneration;
+      _updateCountersFromImportedData();
+      _refreshIssues();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   static Map<String, dynamic> _sessionMap(ManualSession session) =>
       <String, dynamic>{
@@ -2073,6 +2180,27 @@ class ManualTimetableController extends ChangeNotifier {
   }
 
   String _newSessionId() => 'manual-${_nextSessionNumber++}';
+
+  void _updateCountersFromImportedData() {
+    var nextSession = 100;
+    for (final session in _sessions) {
+      final match = RegExp(r'^manual-(\d+)$').firstMatch(session.id);
+      final number = int.tryParse(match?.group(1) ?? '');
+      if (number != null) {
+        nextSession = number + 1 > nextSession ? number + 1 : nextSession;
+      }
+    }
+    var nextSwap = 1;
+    for (final request in _swapRequests) {
+      final match = RegExp(r'^swap-(\d+)$').firstMatch(request.id);
+      final number = int.tryParse(match?.group(1) ?? '');
+      if (number != null) {
+        nextSwap = number + 1 > nextSwap ? number + 1 : nextSwap;
+      }
+    }
+    _nextSessionNumber = nextSession;
+    _nextSwapNumber = nextSwap;
+  }
 
   ManualSubject? _findSubject(String id) =>
       _firstWhereOrNull(_subjects, (item) => item.id == id);

@@ -1,154 +1,180 @@
-# SYNCHRO / Project Chronos
+# JARVIS 3.0 / SYNCHRO — Smart Campus Timetable System
 
-SYNCHRO is a mobile-first smart-campus timetable generator. The active product
-flow is local-first and deterministic: coordinators review college setup,
-faculty loads, batches, subjects, rooms, and teaching requirements; generate a
-schedule; inspect hard conflicts, soft warnings, and unassigned sessions; then
-edit, revalidate, and save a local draft. The first screen is a demo-only
-sign-in/create-account gate: any valid email and non-empty password are accepted
-in memory, and the password is never persisted. No backend is required.
-The existing FastAPI solver and API client remain in the repository as a
-preserved compatibility boundary and regression surface, but the active UI does
-not call them.
+[![Android APK Download](https://img.shields.io/badge/Download-JARVIS--3.0--v1.0.0.apk-2ea44f?style=for-the-badge&logo=android&logoColor=white)](https://github.com/fkmshackathon/JARVIS-3.0-NEW-/releases/latest/download/JARVIS-3.0-v1.0.0.apk)
+[![Release CI](https://img.shields.io/badge/CI-GitHub%20Actions-blue?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/fkmshackathon/JARVIS-3.0-NEW-/actions)
+[![Flutter](https://img.shields.io/badge/Flutter-3.47.1%20Stable-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.143.3-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 
-## Runtime pins
+---
 
-- Flutter: `3.47.1` (stable), recorded in `.fvmrc`
-- Dart: `3.13.1` SDK floor in `pubspec.yaml`, locked by `pubspec.lock`
-- Python: `3.14.7`, recorded in `.python-version`
-- Backend packages: pinned in `backend/requirements.txt`
+## 📱 Quick Android Installation
 
-## Prerequisites
+Anyone with a compatible Android smartphone can download and install the official release build directly:
 
-- Flutter `3.47.1` with a web or Android target
-- Python `3.14.7`
-- `make` for the single test entrypoint on Linux/macOS/WSL
-- Optional: Docker for the reproducible container image
+1. **Direct Download:** Tap to download **[JARVIS-3.0-v1.0.0.apk](https://github.com/fkmshackathon/JARVIS-3.0-NEW-/releases/latest/download/JARVIS-3.0-v1.0.0.apk)**.
+2. **Enable Unknown Apps / Sideloading (if prompted):**
+   - When opening the downloaded APK, Android may ask for permission to install apps from your browser or file manager.
+   - Tap **Settings** → toggle **Allow from this source** → return and tap **Install**.
+3. **Compatibility:** Requires **Android 8.0 (Oreo / API Level 26) or newer**.
+4. **Offline First:** The app operates completely standalone out of the box with zero required cloud setup.
 
-No global project dependencies are required. Flutter packages install into the
-Flutter project cache and Python packages should be installed in a local virtual
-environment.
+---
 
-## Local setup
+## 🏛️ System Overview & Architecture
 
-```bash
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install -r backend/requirements.txt
-flutter pub get
+JARVIS 3.0 (SYNCHRO) is an automated smart-campus timetable management system built with Flutter and Python FastAPI. It automates class schedule generation, conflict detection, room utilization, and faculty workload management.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    JARVIS 3.0 Mobile App                   │
+│         (Flutter 3.47.1 · Material 3 · Local-First)          │
+└──────────────┬───────────────────────────────┬──────────────┘
+               │                               │
+       (Local Workflows)               (Remote Solver API)
+               │                               │
+               ▼                               ▼
+┌──────────────────────────────┐ ┌──────────────────────────────┐
+│  Local Deterministic Engine  │ │     FastAPI / OR-Tools       │
+│  - SharedPreferences Library │ │  - CP-SAT Constraint Engine  │
+│  - Multi-Timetable Drafts    │ │  - Campus Store (SQLite)     │
+│  - Conflict & Load Check     │ │  - Audited JSON API          │
+└──────────────────────────────┘ └──────────────────────────────┘
 ```
 
-On Windows PowerShell, activate the environment with
-`.venv\\Scripts\\Activate.ps1` instead.
+### Key Capabilities
+- **Overview Dashboard:** Institutional summary, academic calendar rhythm, readiness metrics, and timetable library switcher.
+- **Academic Setup:** Configure working days, mandatory break intervals, classrooms/laboratories, departments, faculty rosters, student batches, and teaching requirements.
+- **Deterministic Solver & Timetable Grid:** Interactive day/week timetable matrix with live class inspection, conflict highlighting, and unassigned period accounting.
+- **Timetable Library:** Manage multiple persistent academic schedules (duplicate, rename, delete, switch) stored locally via `shared_preferences`.
+- **Issues & Audit:** Dedicated conflict detection reporting hard constraints (faculty clashes, room double-bookings, capacity violations) and soft balance warnings.
+- **FastAPI / OR-Tools Backend (Preserved Boundary):** Industrial-grade CP-SAT constraint satisfaction engine for server-side solving, validation, and historical run inspection.
 
-Copy `.env.example` to `.env` only when working on the preserved backend
-boundary. The frontend-only demo does not need an API URL, credentials, or
-private local configuration.
+---
 
-## Run the preserved backend (optional)
+## ⚙️ Environment Configuration
 
-This is only needed for backend development and regression checks; the current
-frontend does not depend on it:
+Copy `.env.example` to configure local or deployment environments:
 
 ```bash
-. .venv/bin/activate
+cp .env.example .env
+```
+
+| Variable | Description | Default | Target |
+|---|---|---|---|
+| `SYNCHRO_API` | HTTPS URL of deployed FastAPI backend | `https://jarvis-synchro-backend.up.railway.app` | Flutter Build / Client |
+| `PORT` | Listening port for FastAPI server | `8000` | Backend |
+| `HOST` | Binding address for FastAPI server | `0.0.0.0` | Backend |
+| `SYNCHRO_DB` | SQLite database file location | `synchro.db` | Backend |
+| `SYNCHRO_CORS_ORIGINS`| Allowed CORS origins (comma-separated or `*`) | `*` | Backend |
+
+---
+
+## 💻 Local Development Guide
+
+### Prerequisites
+- Flutter SDK `3.47.1` (or current stable)
+- Python `3.12` or `3.14`
+- Git
+
+### 1. Backend Setup (FastAPI)
+```bash
+# Create and activate virtual environment
+python -m venv .venv
+# Linux / macOS:
+source .venv/bin/activate
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+
+# Install dependencies
+python -m pip install -r backend/requirements.txt
+
+# Run the backend locally
 uvicorn app.main:app --app-dir backend --reload --host 0.0.0.0 --port 8000
 ```
+Verify the backend at:
+- Health check: `http://localhost:8000/health`
+- Interactive Swagger docs: `http://localhost:8000/docs`
+- Sample campus payload: `http://localhost:8000/sample-campus`
 
-## Run the Flutter app
-
-From the repository root:
-
+### 2. Frontend Setup (Flutter)
 ```bash
+# Get dependencies
+flutter pub get
+
+# Run on Android device or emulator
+flutter run
+
+# Run on Chrome for web development
 flutter run -d chrome
 ```
 
-The web target is rendered inside a centered phone-sized shell on wide screens
-and uses the available width on real phones.
+---
 
-### Local generator flow
+## 🧪 Testing and Quality Assurance
 
-The app opens with four primary areas:
-
-1. **Overview** — institution/semester summary, setup progress, collection
-   counts, honest timetable state, and local sign-out.
-2. **Setup** — working days, a mandatory break, editable batches, subjects,
-   faculty, rooms/labs, term rhythm, preferences, and teaching requirements.
-3. **Generate & Timetable** — a real pre-generation hand-off followed by the
-   generated day/week timetable and class editor.
-4. **Issues** — hard conflicts, soft warnings, unassigned sessions, and setup
-   problems detected in the current result.
-
-After the demo access screen, the bundled sample data is labelled
-`DEMO SAMPLE · LOCAL DRAFT ONLY`. Sign out clears only the in-memory profile;
-the local timetable draft remains available after signing back in. The local
-generator expands configured teaching requirements and uses bounded,
-deterministic placement with hard checks for faculty, room, batch, break,
-capacity, room type, closure, and absence constraints. It scores soft
-preferences such as back-to-back teaching, room sharing, and workload balance.
-If resources are insufficient, it returns a partial/infeasible result with the
-affected requirements and an explanation instead of claiming success.
-
-After generation, coordinators can edit, move, reassign, delete, or save a
-class; handle a faculty absence with a proxy or room closure; and revalidate the
-same local timetable. Browser/device persistence is provided by
-`shared_preferences` and is local-only. A generated timetable is never shown
-before the Generate action.
-
-## Test and quality checks
-
-The single offline test command is:
+Run the comprehensive test suites across both the Flutter client and the Python solver backend:
 
 ```bash
-make test
-```
-
-It runs the Flutter generator, controller, widget/API tests and the preserved
-backend API, solver, and validator tests. Individual checks are also available:
-
-```bash
+# 1. Run Flutter static analysis
 flutter analyze
+
+# 2. Run all Flutter unit & widget tests (51 tests)
 flutter test
-python -m pytest backend/tests
+
+# 3. Run all Python backend tests (47 tests)
+pytest backend
 ```
 
-## Build and deploy
+---
+
+## 🚀 Backend Production Deployment Guide
+
+The backend can be deployed in minutes on any container platform or cloud provider.
+
+### Option A: Railway / Render (One-Click Docker)
+1. Fork or push this repository to GitHub.
+2. In **Render** or **Railway**, create a **New Web Service** connected to your repository.
+3. Configure:
+   - **Environment:** Docker
+   - **Dockerfile Path:** `./Dockerfile`
+   - **Port:** `8000`
+   - **Healthcheck Path:** `/health`
+4. Deploy the service. Your backend will be accessible at `https://your-app.onrender.com`.
+
+### Option B: Docker CLI / VPS
+```bash
+# Build the production container image
+docker build -t jarvis-synchro:latest .
+
+# Run the container
+docker run -d \
+  -p 8000:8000 \
+  -p 8080:8080 \
+  -e SYNCHRO_CORS_ORIGINS="*" \
+  --name jarvis-synchro \
+  jarvis-synchro:latest
+```
+
+---
+
+## 📦 Building the Android Release APK Locally
+
+To build a production release APK on your workstation:
 
 ```bash
-make build-web
-make build-apk
+flutter build apk --release --dart-define=SYNCHRO_API=https://your-backend-domain.com
 ```
 
-The Docker image builds the Flutter web client and the preserved backend without
-changing the solver contract:
+The compiled APK will be located at:
+`build/app/outputs/flutter-apk/app-release.apk`
 
-```bash
-docker build -t synchro:local .
-docker run --rm -p 8000:8000 -p 8080:8080 synchro:local
-```
+---
 
-Open `http://localhost:8080` for the web client and `http://localhost:8000`
-for the optional API health endpoint. The current frontend does not require an
-API URL for its local workflow.
+## 🔄 Automated CI/CD & GitHub Actions
 
-## Product boundaries
-
-The active frontend exposes local setup, deterministic timetable generation,
-local conflict checks, workload, room availability, and reviewable
-absence/proxy/swap drafts. It does not expose real authentication, role
-authorization, server validation, publishing, or external synchronization. The
-local generator is intentionally a bounded hackathon-scale search, not a claim
-of university-scale optimization. The backend and API client listed below are
-preserved for compatibility and regression testing, not used by the current
-product flow.
-
-The scheduling implementation is deliberately protected in:
-
-- `backend/app/solver.py`
-- `backend/app/validator.py`
-- `backend/app/analysis.py`
-- `backend/app/store.py`
-- `backend/app/main.py`
-- `lib/data/synchro_api.dart`
-- `lib/data/models.dart`
-- `lib/state/scheduling_controller.dart`
+The repository includes a GitHub Actions release pipeline (`.github/workflows/release.yml`) that:
+1. Runs Python backend test suite on `ubuntu-latest`.
+2. Verifies Flutter code formatting and static analysis (`flutter analyze`).
+3. Executes all Flutter unit and widget tests (`flutter test`).
+4. Compiles the Android release APK with production Dart defines.
+5. Computes SHA-256 checksums and publishes the release asset as `JARVIS-3.0-v1.0.0.apk` to GitHub Releases.

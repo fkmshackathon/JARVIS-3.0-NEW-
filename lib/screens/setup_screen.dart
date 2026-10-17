@@ -40,8 +40,8 @@ class SetupScreen extends StatefulWidget {
   final VoidCallback? onOpenWorkload;
   final VoidCallback? onOpenRooms;
 
-  /// Called after the local sample draft is restored.
-  final VoidCallback? onReset;
+  /// Resets the complete local timetable library after confirmation.
+  final Future<void> Function()? onReset;
 
   @override
   State<SetupScreen> createState() => _SetupScreenState();
@@ -381,12 +381,15 @@ class _SetupScreenState extends State<SetupScreen> {
       ),
     );
     if (shouldReset != true) return;
-    await controller.resetDemo();
+    if (widget.onReset != null) {
+      await widget.onReset!();
+    } else {
+      await controller.resetDemo();
+    }
     if (!mounted) return;
     _institutionController.text = widget.institutionName;
     _semesterController.text = widget.semesterLabel;
     setState(_loadTermValuesFromController);
-    widget.onReset?.call();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Local demo restored.')));
