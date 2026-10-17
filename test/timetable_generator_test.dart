@@ -418,6 +418,53 @@ void main() {
       isTrue,
     );
   });
+
+  test('cross-department sharing preference controls borrowed rooms', () {
+    final base = _input(
+      rooms: const <ManualRoom>[
+        ManualRoom(
+          id: 'room-mech',
+          name: 'Mechanical CR',
+          kind: 'classroom',
+          capacity: 50,
+          department: 'Mechanical',
+          borrowable: true,
+        ),
+      ],
+      subjects: const <ManualSubject>[
+        ManualSubject(id: 'subject-a', name: 'A', code: 'A', lectureHours: 1),
+      ],
+      timeSlots: const <ManualTimeSlot>[
+        ManualTimeSlot(day: 0, startMinute: 540, endMinute: 600),
+      ],
+      requirements: const <TimetableTeachingRequirement>[
+        TimetableTeachingRequirement(
+          id: 'req-a',
+          subjectId: 'subject-a',
+          batchId: 'batch-a',
+          facultyId: 'faculty-a',
+          department: 'IT',
+        ),
+      ],
+    );
+
+    final borrowed = TimetableGenerator().generate(base);
+    final restricted = TimetableGenerator().generate(
+      TimetableGenerationInput(
+        faculty: base.faculty,
+        rooms: base.rooms,
+        batches: base.batches,
+        subjects: base.subjects,
+        timeSlots: base.timeSlots,
+        requirements: base.requirements,
+        allowCrossDepartmentSharing: false,
+      ),
+    );
+
+    expect(borrowed.isSuccess, isTrue, reason: borrowed.message);
+    expect(borrowed.sessions.single.roomId, 'room-mech');
+    expect(restricted.status, TimetableGenerationStatus.infeasible);
+  });
 }
 
 TimetableGenerationInput _input({
