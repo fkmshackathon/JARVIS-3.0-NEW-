@@ -70,3 +70,8 @@ key.properties
 # Local scratch / verification artifacts
 .qoder-tmp/
 
+
+# Flutter build outputs
+build/
+*.apk
+*.sha256
