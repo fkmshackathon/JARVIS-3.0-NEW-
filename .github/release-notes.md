@@ -1,4 +1,4 @@
-## SYNCHRO — Android v1.1.0
+## SYNCHRO — Android v1.1.1
 
 Faculty First. Smart Timetable.
 
