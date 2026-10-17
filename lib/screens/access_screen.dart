@@ -44,6 +44,8 @@ class AccessScreen extends StatefulWidget {
 
 class _AccessScreenState extends State<AccessScreen> {
   final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _collegeController;
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
   late final DemoSession _session;
@@ -61,6 +63,8 @@ class _AccessScreenState extends State<AccessScreen> {
   @override
   void initState() {
     super.initState();
+    _nameController = TextEditingController();
+    _collegeController = TextEditingController();
     _emailController = TextEditingController();
     _passwordController = TextEditingController();
     _session = widget.session ?? DemoSession();
@@ -69,8 +73,12 @@ class _AccessScreenState extends State<AccessScreen> {
 
   @override
   void dispose() {
+    _nameController.clear();
+    _collegeController.clear();
     _emailController.clear();
     _passwordController.clear();
+    _nameController.dispose();
+    _collegeController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     if (_ownsSession) _session.dispose();
@@ -157,8 +165,8 @@ class _AccessScreenState extends State<AccessScreen> {
   Widget _accessCard(ThemeData theme) {
     final title = _isCreatingAccount ? 'Create your local profile' : 'Sign in';
     final helper = _isCreatingAccount
-        ? 'Start with a local profile and explore your timetable workspace.'
-        : 'Use any valid email and password to enter the demo.';
+        ? 'Create your local profile with your name and college. All fields are required.'
+        : 'Enter your name, college, email and password for the local demo. All fields are required.';
 
     return SectionCard(
       overline: 'ACCESS',
@@ -209,6 +217,37 @@ class _AccessScreenState extends State<AccessScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  TextFormField(
+                    key: const Key('access-name-field'),
+                    controller: _nameController,
+                    keyboardType: TextInputType.name,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.name],
+                    decoration: const InputDecoration(
+                      labelText: 'Full name',
+                      hintText: 'Enter your name',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    validator: DemoSession.validateName,
+                    onChanged: (_) => _clearFeedbackOnEdit(),
+                  ),
+                  const SizedBox(height: SynchroSpacing.md),
+                  TextFormField(
+                    key: const Key('access-college-field'),
+                    controller: _collegeController,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.organizationName],
+                    decoration: const InputDecoration(
+                      labelText: 'College name',
+                      hintText: 'Enter your college',
+                      prefixIcon: Icon(Icons.school_outlined),
+                    ),
+                    validator: DemoSession.validateCollege,
+                    onChanged: (_) => _clearFeedbackOnEdit(),
+                  ),
+                  const SizedBox(height: SynchroSpacing.md),
                   TextFormField(
                     key: const Key('access-email-field'),
                     controller: _emailController,
@@ -338,8 +377,18 @@ class _AccessScreenState extends State<AccessScreen> {
       }
 
       final didAuthenticate = _isCreatingAccount
-          ? _session.signUp(email: email, password: password)
-          : _session.signIn(email: email, password: password);
+          ? _session.signUp(
+              email: email,
+              password: password,
+              displayName: _nameController.text.trim(),
+              collegeName: _collegeController.text.trim(),
+            )
+          : _session.signIn(
+              email: email,
+              password: password,
+              displayName: _nameController.text.trim(),
+              collegeName: _collegeController.text.trim(),
+            );
       if (!didAuthenticate || _session.profile == null) {
         _showError('Check the highlighted fields and try again.');
         return;

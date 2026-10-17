@@ -107,16 +107,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Welcome to SYNCHRO.'), findsOneWidget);
 
-    await tester.enterText(
-      find.byKey(const Key('access-email-field')),
-      'planner@campus.edu',
-    );
-    await tester.enterText(
-      find.byKey(const Key('access-password-field')),
-      'demo-password',
-    );
-    await tester.tap(find.byKey(const Key('access-submit-button')));
-    await tester.pumpAndSettle();
+    await _completeAccess(tester);
 
     await tester.tap(find.text('Generate & Timetable'));
     await tester.pumpAndSettle();
@@ -157,6 +148,18 @@ Future<void> _bootSignedIn(WidgetTester tester) async {
   await tester.pumpWidget(const SynchroApp());
   await tester.pumpAndSettle();
   expect(find.text('Welcome to SYNCHRO.'), findsOneWidget);
+  await _completeAccess(tester);
+}
+
+Future<void> _completeAccess(WidgetTester tester) async {
+  await tester.enterText(
+    find.byKey(const Key('access-name-field')),
+    'Aarya Dsouza',
+  );
+  await tester.enterText(
+    find.byKey(const Key('access-college-field')),
+    'College of Engineering & Arts',
+  );
   await tester.enterText(
     find.byKey(const Key('access-email-field')),
     'planner@campus.edu',
@@ -165,6 +168,8 @@ Future<void> _bootSignedIn(WidgetTester tester) async {
     find.byKey(const Key('access-password-field')),
     'demo-password',
   );
+  await tester.ensureVisible(find.byKey(const Key('access-submit-button')));
+  await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('access-submit-button')));
   await tester.pumpAndSettle();
 }

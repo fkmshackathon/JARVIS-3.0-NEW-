@@ -6,16 +6,19 @@ import 'package:flutter/foundation.dart';
 /// a password long enough to validate and authenticate the demo action, but it
 /// is never copied into this object or into [DemoSession].
 class DemoProfile {
-  const DemoProfile({required this.email, this.displayName});
+  const DemoProfile({required this.email, this.displayName, this.collegeName});
 
   final String email;
   final String? displayName;
+  final String? collegeName;
 
   /// A small, safe snapshot for UI consumers that need profile metadata.
   Map<String, String> get metadata => Map.unmodifiable({
     'email': email,
     if (displayName != null && displayName!.isNotEmpty)
       'displayName': displayName!,
+    if (collegeName != null && collegeName!.isNotEmpty)
+      'collegeName': collegeName!,
   });
 
   @override
@@ -46,8 +49,18 @@ class DemoSession extends ChangeNotifier {
       _profile?.metadata ?? const <String, String>{};
 
   /// Validates and enters the demo using a local profile only.
-  bool signIn({required String email, required String password}) {
-    return _authenticate(email: email, password: password);
+  bool signIn({
+    required String email,
+    required String password,
+    String? displayName,
+    String? collegeName,
+  }) {
+    return _authenticate(
+      email: email,
+      password: password,
+      displayName: displayName,
+      collegeName: collegeName,
+    );
   }
 
   /// Validates and creates a local demo profile.
@@ -58,11 +71,13 @@ class DemoSession extends ChangeNotifier {
     required String email,
     required String password,
     String? displayName,
+    String? collegeName,
   }) {
     return _authenticate(
       email: email,
       password: password,
       displayName: displayName,
+      collegeName: collegeName,
     );
   }
 
@@ -92,13 +107,34 @@ class DemoSession extends ChangeNotifier {
 
   static bool isValidPassword(String? value) => validatePassword(value) == null;
 
+  static String? validateName(String? value) {
+    final name = value?.trim() ?? '';
+    if (name.isEmpty) return 'Name is required.';
+    return name.length > 120
+        ? 'Use 120 characters or fewer for your name.'
+        : null;
+  }
+
+  static String? validateCollege(String? value) {
+    final college = value?.trim() ?? '';
+    if (college.isEmpty) return 'College is required.';
+    return college.length > 200
+        ? 'Use 200 characters or fewer for your college.'
+        : null;
+  }
+
   bool _authenticate({
     required String email,
     required String password,
     String? displayName,
+    String? collegeName,
   }) {
     final normalizedEmail = email.trim().toLowerCase();
     if (!isValidEmail(normalizedEmail) || !isValidPassword(password)) {
+      return false;
+    }
+    if ((displayName != null && validateName(displayName) != null) ||
+        (collegeName != null && validateCollege(collegeName) != null)) {
       return false;
     }
 
@@ -106,6 +142,9 @@ class DemoSession extends ChangeNotifier {
       email: normalizedEmail,
       displayName: displayName?.trim().isNotEmpty == true
           ? displayName!.trim()
+          : null,
+      collegeName: collegeName?.trim().isNotEmpty == true
+          ? collegeName!.trim()
           : null,
     );
     notifyListeners();
