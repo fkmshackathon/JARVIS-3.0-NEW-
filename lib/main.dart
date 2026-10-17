@@ -3,11 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-import 'auth/auth_bootstrap.dart';
-import 'auth/auth_session.dart';
-import 'data/assistant_greeting.dart';
-import 'screens/account_completion_screen.dart';
-import 'screens/firebase_access_screen.dart';
+import 'screens/access_screen.dart';
 import 'screens/app_shell.dart';
 import 'screens/architecture_screen.dart';
 import 'screens/generate_timetable_screen.dart';
@@ -16,6 +12,7 @@ import 'screens/setup_screen.dart';
 import 'screens/timetable_library_screen.dart';
 import 'screens/timetable_operations_screen.dart';
 import 'state/assistant_controller.dart';
+import 'state/demo_session.dart';
 import 'state/timetable_library_controller.dart';
 import 'theme/synchro_theme.dart';
 import 'theme/theme_controller.dart';
@@ -24,24 +21,21 @@ import 'widgets/assistant_panel.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(FirebaseAuthBootstrap(builder: (session) => SynchroApp(session: session)));
+  runApp(const SynchroApp());
 }
 
 class SynchroApp extends StatefulWidget {
-  const SynchroApp({super.key, required this.session});
-  final AuthSession session;
+  const SynchroApp({super.key});
 
   @override
   State<SynchroApp> createState() => _SynchroAppState();
 }
 
 class _SynchroAppState extends State<SynchroApp> {
-  late final AuthSession _session = widget.session;
-  TimetableLibraryController? _library;
-  String? _accountUid;
+  final DemoSession _session = DemoSession();
+  final TimetableLibraryController _library = TimetableLibraryController();
   bool _workspaceReady = false;
   final AssistantController _assistant = AssistantController();
-  final AssistantGreeting _greeting = AssistantGreeting();
   final GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
   String _page = 'Overview';
   bool _assistantOpen = false;
@@ -49,45 +43,30 @@ class _SynchroAppState extends State<SynchroApp> {
   @override
   void initState() {
     super.initState();
-    _session.addListener(_authChanged);
-    _authChanged();
+    _session.addListener(_sessionChanged);
+    unawaited(_library.restore().then((_) {
+      if (mounted) setState(() => _workspaceReady = true);
+    }));
   }
 
-  void _authChanged() {
-    final uid = _session.isSignedIn ? _session.user!.uid : null;
-    if (uid == _accountUid) return;
-    final previous = _library;
-    _accountUid = uid;
-    _library = null;
-    _workspaceReady = false;
+  void _sessionChanged() {
+    if (_session.isSignedIn) return;
     _assistant.clear();
     _assistantOpen = false;
-    previous?.dispose();
+    _page = 'Overview';
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _accountUid == uid) {
+      if (mounted && !_session.isSignedIn) {
         _navigator.currentState?.popUntil((route) => route.isFirst);
       }
     });
-    if (uid != null) {
-      final library = TimetableLibraryController(ownerUid: uid);
-      _library = library;
-      unawaited(library.restore().then((_) {
-        if (mounted && identical(_library, library) && _accountUid == uid &&
-            _session.isSignedIn) {
-          setState(() => _workspaceReady = true);
-        }
-      }));
-    }
-    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _session.removeListener(_authChanged);
-    _library?.dispose();
+    _session.removeListener(_sessionChanged);
+    _library.dispose();
     _session.dispose();
     _assistant.dispose();
-    _greeting.dispose();
     super.dispose();
   }
 
@@ -154,18 +133,14 @@ class _SynchroAppState extends State<SynchroApp> {
   }
 
   Widget _authenticationHome() {
-    if (_session.stage == AuthStage.restoring) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (_session.stage == AuthStage.profileRequired ||
-        _session.stage == AuthStage.verificationRequired) {
-      return AccountCompletionScreen(
-        key: ValueKey(_session.user?.uid), session: _session,
+    if (!_session.isSignedIn) {
+      return AccessScreen(
+        session: _session,
+        onAuthenticated: () {},
       );
     }
-    if (!_session.isSignedIn) return FirebaseAccessScreen(session: _session);
     final library = _library;
-    if (!_workspaceReady || library == null) {
+    if (!_workspaceReady) {
       return const Scaffold(body: Center(child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [CircularProgressIndicator(), SizedBox(height: 16),
@@ -174,17 +149,16 @@ class _SynchroAppState extends State<SynchroApp> {
     }
     return AppShell(
       library: library,
-      onSignOut: () { unawaited(_session.signOut()); },
+      onSignOut: _session.signOut,
       onPageChanged: (page) => _page = page,
     );
   }
 
   void _openAssistant() {
     final library = _library;
-    if (library == null || !_session.isSignedIn || !_workspaceReady) return;
+    if (!_session.isSignedIn || !_workspaceReady) return;
     final context = _navigator.currentState?.overlay?.context;
     if (context == null) return;
-    _greeting.play();
     setState(() => _assistantOpen = true);
     showDialog<void>(
       context: context,
@@ -201,7 +175,7 @@ class _SynchroAppState extends State<SynchroApp> {
 
   void _navigateFromAssistant(String action) {
     final library = _library;
-    if (library == null || !_session.isSignedIn || !_workspaceReady) return;
+    if (!_session.isSignedIn || !_workspaceReady) return;
     final workspace = library.workspace;
     final Widget screen = switch (action) {
       'architecture' => const ArchitectureScreen(),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:synchro/main.dart';
-import 'support/fake_auth.dart';
 import 'package:synchro/screens/architecture_screen.dart';
 import 'package:synchro/screens/manual_timetable_screen.dart';
 import 'package:synchro/screens/timetable_operations_screen.dart';
@@ -59,7 +58,7 @@ void main() {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(SynchroApp(session: testAuthSession()));
+      await tester.pumpWidget(const SynchroApp());
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('access-name-field')),

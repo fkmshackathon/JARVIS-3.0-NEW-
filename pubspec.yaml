@@ -40,10 +40,6 @@ dependencies:
   pdf: 3.11.3
   file_saver: 0.3.1
   archive: 3.6.1
-  firebase_core: 5.0.0
-  firebase_auth: 7.0.0
-  google_sign_in: 7.2.0
-  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -71,7 +67,6 @@ flutter:
     - assets/branding/synchro_mark.svg
     - assets/branding/synchro_wordmark.svg
     - assets/fonts/
-    - assets/sounds/
 
   fonts:
     - family: NotoSans

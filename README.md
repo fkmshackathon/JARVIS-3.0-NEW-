@@ -43,6 +43,13 @@ are not implemented. No mathematically optimal result is claimed. Room equipment
 is configured inventory used for event room selection; per-subject equipment
 constraints are not an existing generator input.
 
+**Sign in** and **Create account** remain available with required Name, College,
+Email and Password fields. Both enter the local workspace without a cloud
+account, Google sign-in, email verification or provider configuration. Passwords
+are validated for the demo action but are not stored. Signing out clears the
+in-memory profile without deleting locally saved timetable drafts. This is not
+production identity verification or a secure multi-user account system.
+
 Groq was **not present in the inspected checkout**. The new server route is
 implemented, but live AI requires a valid server-side environment credential.
 Missing credentials/provider errors leave the app usable through clearly
