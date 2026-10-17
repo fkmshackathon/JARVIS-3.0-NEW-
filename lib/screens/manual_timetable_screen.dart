@@ -4,6 +4,14 @@ import '../state/manual_timetable_controller.dart';
 import '../theme/tokens.dart';
 import '../widgets/ui.dart';
 
+String _formatClock(int minutes) {
+  final hour = minutes ~/ 60;
+  final minute = minutes % 60;
+  final suffix = hour >= 12 ? 'PM' : 'AM';
+  final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+  return '$displayHour:${minute.toString().padLeft(2, '0')} $suffix';
+}
+
 /// Phone-first editor for the timetable produced by the deterministic local
 /// generator. It remains useful for post-generation corrections and review.
 ///
@@ -72,7 +80,14 @@ class _ManualTimetableScreenState extends State<ManualTimetableScreen> {
                 _IssuesCard(controller: controller),
               ],
               const SizedBox(height: SynchroSpacing.lg),
-              if (controller.showWeek)
+              if (constraints.maxWidth >= 900)
+                _DesktopWeekGrid(
+                  controller: controller,
+                  onAdd: (day, start, end) =>
+                      _openEditor(day: day, start: start, end: end),
+                  onOpen: _openDetails,
+                )
+              else if (controller.showWeek)
                 _WeekTimeline(
                   controller: controller,
                   onAdd: (day, start, end) =>
@@ -632,6 +647,178 @@ class _DayTimeline extends StatelessWidget {
         batchId: controller.selectedBatchId,
         onAdd: onAdd,
         onOpen: onOpen,
+      ),
+    );
+  }
+}
+
+class _DesktopWeekGrid extends StatelessWidget {
+  const _DesktopWeekGrid({
+    required this.controller,
+    required this.onAdd,
+    required this.onOpen,
+  });
+
+  final ManualTimetableController controller;
+  final void Function(int day, int start, int end) onAdd;
+  final ValueChanged<ManualSession> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = controller.workingDays;
+    final starts =
+        controller.timeSlots
+            .where((slot) => !slot.isBreak)
+            .map((slot) => slot.startMinute)
+            .toSet()
+            .toList()
+          ..sort();
+    final sessions = <String, ManualSession>{
+      for (final session in controller.sessionsFor(
+        batchId: controller.selectedBatchId,
+      ))
+        '${session.day}:${session.startMinute}': session,
+    };
+
+    return SectionCard(
+      overline: 'Desktop weekly grid',
+      title: '${controller.selectedBatch?.name ?? 'Selected batch'} · Week',
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Table(
+          defaultColumnWidth: const FixedColumnWidth(150),
+          columnWidths: const <int, TableColumnWidth>{0: FixedColumnWidth(82)},
+          border: TableBorder.all(
+            color: SynchroColors.hairline,
+            borderRadius: BorderRadius.all(Radius.circular(SynchroRadius.chip)),
+          ),
+          children: [
+            TableRow(
+              decoration: const BoxDecoration(color: SynchroColors.cream),
+              children: [
+                const _GridHeaderCell('Time'),
+                for (final day in days)
+                  _GridHeaderCell(controller.dayName(day)),
+              ],
+            ),
+            for (final start in starts)
+              TableRow(
+                children: [
+                  _GridTimeCell(start),
+                  for (final day in days)
+                    _DesktopGridCell(
+                      slot: _slotAt(controller, day, start),
+                      session: sessions['$day:$start'],
+                      controller: controller,
+                      onAdd: onAdd,
+                      onOpen: onOpen,
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+ManualTimeSlot? _slotAt(
+  ManualTimetableController controller,
+  int day,
+  int start,
+) {
+  for (final slot in controller.timeSlots) {
+    if (slot.day == day && slot.startMinute == start) return slot;
+  }
+  return null;
+}
+
+class _GridHeaderCell extends StatelessWidget {
+  const _GridHeaderCell(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(SynchroSpacing.sm),
+    child: Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: Theme.of(context).textTheme.labelSmall
+          ?.copyWith(fontWeight: FontWeight.w700),
+    ),
+  );
+}
+
+class _GridTimeCell extends StatelessWidget {
+  const _GridTimeCell(this.start);
+
+  final int start;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 86,
+    child: Padding(
+      padding: const EdgeInsets.all(SynchroSpacing.sm),
+      child: Text(
+        _formatClock(start),
+        style: Theme.of(context).textTheme.labelSmall,
+      ),
+    ),
+  );
+}
+
+class _DesktopGridCell extends StatelessWidget {
+  const _DesktopGridCell({
+    required this.slot,
+    required this.session,
+    required this.controller,
+    required this.onAdd,
+    required this.onOpen,
+  });
+
+  final ManualTimeSlot? slot;
+  final ManualSession? session;
+  final ManualTimetableController controller;
+  final void Function(int day, int start, int end) onAdd;
+  final ValueChanged<ManualSession> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    if (slot == null) return const SizedBox(height: 86);
+    if (slot!.isBreak) {
+      return Container(
+        height: 86,
+        color: SynchroColors.cream,
+        alignment: Alignment.center,
+        child: Text(
+          slot!.label ?? 'Break',
+          style: Theme.of(context).textTheme.labelSmall,
+        ),
+      );
+    }
+    if (session == null) {
+      return SizedBox(
+        height: 86,
+        child: InkWell(
+          onTap: () => onAdd(slot!.day, slot!.startMinute, slot!.endMinute),
+          child: Center(
+            child: Text('Open', style: Theme.of(context).textTheme.labelSmall),
+          ),
+        ),
+      );
+    }
+    return SizedBox(
+      height: 86,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: _ManualSessionCard(
+          session: session!,
+          controller: controller,
+          onTap: () => onOpen(session!),
+          compact: true,
+        ),
       ),
     );
   }
