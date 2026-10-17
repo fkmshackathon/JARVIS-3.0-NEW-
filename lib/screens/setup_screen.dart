@@ -132,6 +132,12 @@ class _SetupScreenState extends State<SetupScreen> {
                       onOpenRooms: widget.onOpenRooms,
                     ),
                     const SizedBox(height: 16),
+                    _EditableSetupRecords(
+                      controller: controller,
+                      onEditBatch: _editBatch,
+                      onEditSubject: _editSubject,
+                    ),
+                    const SizedBox(height: 16),
                     _TeachingRequirementsCard(
                       controller: controller,
                       onEdit: _editRequirement,
@@ -468,6 +474,154 @@ class _SetupScreenState extends State<SetupScreen> {
         labSessions: result.labSessions,
       ),
     );
+  }
+
+  Future<void> _editBatch(ManualBatch batch) async {
+    final nameController = TextEditingController(text: batch.name);
+    final yearController = TextEditingController(text: '${batch.year}');
+    final sizeController = TextEditingController(text: '${batch.size}');
+    final result = await showDialog<ManualBatch>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit student batch'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Batch name'),
+              ),
+              TextField(
+                controller: yearController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Academic year'),
+              ),
+              TextField(
+                controller: sizeController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Student count'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(
+              batch.copyWith(
+                name: nameController.text.trim().isEmpty
+                    ? batch.name
+                    : nameController.text.trim(),
+                year: int.tryParse(yearController.text) ?? batch.year,
+                size: int.tryParse(sizeController.text) ?? batch.size,
+              ),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    nameController.dispose();
+    yearController.dispose();
+    sizeController.dispose();
+    if (result != null) controller.editBatch(result);
+  }
+
+  Future<void> _editSubject(ManualSubject subject) async {
+    final nameController = TextEditingController(text: subject.name);
+    final codeController = TextEditingController(text: subject.code);
+    final lectureController = TextEditingController(
+      text: '${subject.lectureHours}',
+    );
+    final labController = TextEditingController(text: '${subject.labHours}');
+    var practical = subject.isPractical;
+    final result = await showDialog<ManualSubject>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit subject'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Subject name'),
+                ),
+                TextField(
+                  controller: codeController,
+                  decoration: const InputDecoration(labelText: 'Subject code'),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: lectureController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Lecture hours',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: SynchroSpacing.md),
+                    Expanded(
+                      child: TextField(
+                        controller: labController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Lab hours',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: practical,
+                  onChanged: (value) =>
+                      setDialogState(() => practical = value ?? false),
+                  title: const Text('Practical / laboratory subject'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                subject.copyWith(
+                  name: nameController.text.trim().isEmpty
+                      ? subject.name
+                      : nameController.text.trim(),
+                  code: codeController.text.trim().isEmpty
+                      ? subject.code
+                      : codeController.text.trim(),
+                  isPractical: practical,
+                  lectureHours:
+                      int.tryParse(lectureController.text) ??
+                      subject.lectureHours,
+                  labHours:
+                      int.tryParse(labController.text) ?? subject.labHours,
+                ),
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    nameController.dispose();
+    codeController.dispose();
+    lectureController.dispose();
+    labController.dispose();
+    if (result != null) controller.editSubject(result);
   }
 
   void _completeSetup() {
@@ -922,6 +1076,60 @@ class _SetupActions extends StatelessWidget {
         label: const Text('Review local draft'),
       ),
     ],
+  );
+}
+
+class _EditableSetupRecords extends StatelessWidget {
+  const _EditableSetupRecords({
+    required this.controller,
+    required this.onEditBatch,
+    required this.onEditSubject,
+  });
+
+  final ManualTimetableController controller;
+  final ValueChanged<ManualBatch> onEditBatch;
+  final ValueChanged<ManualSubject> onEditSubject;
+
+  @override
+  Widget build(BuildContext context) => SectionCard(
+    overline: 'Review and edit',
+    title: 'Batches and subjects',
+    child: Column(
+      children: [
+        for (final batch in controller.batches)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.groups_outlined),
+            title: Text(batch.name),
+            subtitle: Text('${batch.year} year · ${batch.size} students'),
+            trailing: IconButton(
+              onPressed: () => onEditBatch(batch),
+              tooltip: 'Edit batch',
+              icon: const Icon(Icons.edit_outlined, size: 18),
+            ),
+          ),
+        if (controller.batches.isNotEmpty && controller.subjects.isNotEmpty)
+          const Divider(height: SynchroSpacing.lg),
+        for (final subject in controller.subjects)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              subject.isPractical
+                  ? Icons.science_outlined
+                  : Icons.menu_book_outlined,
+            ),
+            title: Text('${subject.code} · ${subject.name}'),
+            subtitle: Text(
+              '${subject.lectureHours} lecture h · ${subject.labHours} lab h',
+            ),
+            trailing: IconButton(
+              onPressed: () => onEditSubject(subject),
+              tooltip: 'Edit subject',
+              icon: const Icon(Icons.edit_outlined, size: 18),
+            ),
+          ),
+      ],
+    ),
   );
 }
 
