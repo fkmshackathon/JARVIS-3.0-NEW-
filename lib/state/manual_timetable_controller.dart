@@ -56,12 +56,17 @@ class ManualTimetableController extends ChangeNotifier {
     _savedBreakStart = _breakStart;
     _savedBreakEnd = _breakEnd;
     _savedBreakLabel = _breakLabel;
+    _savedTeachingStart = _teachingStart;
+    _savedTeachingEnd = _teachingEnd;
+    _savedSlotDurationMinutes = _slotDurationMinutes;
+    _savedAllowStaggeredStartTimes = _allowStaggeredStartTimes;
     _savedAvoidBackToBack = _avoidBackToBack;
     _savedPreferBalancedWorkload = _preferBalancedWorkload;
     _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
     _savedGenerationResult = _generationResult;
     _savedGenerationStatus = _generationStatus;
     _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
+    _savedNeedsRegeneration = _needsRegeneration;
     _refreshIssues();
   }
 
@@ -84,6 +89,7 @@ class ManualTimetableController extends ChangeNotifier {
   List<ManualTimeSlot> _timeSlots = <ManualTimeSlot>[];
   List<ManualIssue> _hardConflicts = <ManualIssue>[];
   List<ManualIssue> _softWarnings = <ManualIssue>[];
+  List<ManualIssue> _setupIssues = <ManualIssue>[];
   List<ManualSwapRequest> _swapRequests = <ManualSwapRequest>[];
   List<TimetableTeachingRequirement> _requirements =
       <TimetableTeachingRequirement>[];
@@ -99,6 +105,7 @@ class ManualTimetableController extends ChangeNotifier {
   TimetableGenerationResult? _savedGenerationResult;
   TimetableGenerationStatus? _savedGenerationStatus;
   List<ManualIssue> _savedGenerationIssues = <ManualIssue>[];
+  bool _savedNeedsRegeneration = false;
 
   String _selectedBatchId = '';
   int _selectedDay = 0;
@@ -114,6 +121,10 @@ class ManualTimetableController extends ChangeNotifier {
   int _breakStart = 720;
   int _breakEnd = 750;
   String _breakLabel = 'Lunch break';
+  int _teachingStart = 540;
+  int _teachingEnd = 920;
+  int _slotDurationMinutes = 50;
+  bool _allowStaggeredStartTimes = true;
   bool _avoidBackToBack = true;
   bool _preferBalancedWorkload = true;
   bool _allowCrossDepartmentSharing = true;
@@ -123,6 +134,10 @@ class ManualTimetableController extends ChangeNotifier {
   int _savedBreakStart = 720;
   int _savedBreakEnd = 750;
   String _savedBreakLabel = 'Lunch break';
+  int _savedTeachingStart = 540;
+  int _savedTeachingEnd = 920;
+  int _savedSlotDurationMinutes = 50;
+  bool _savedAllowStaggeredStartTimes = true;
   bool _savedAvoidBackToBack = true;
   bool _savedPreferBalancedWorkload = true;
   bool _savedAllowCrossDepartmentSharing = true;
@@ -130,6 +145,7 @@ class ManualTimetableController extends ChangeNotifier {
   TimetableGenerationStatus? _generationStatus;
   List<ManualIssue> _generationIssues = <ManualIssue>[];
   bool _isGenerating = false;
+  bool _needsRegeneration = false;
   int _nextSessionNumber = 100;
   int _nextSwapNumber = 1;
 
@@ -153,6 +169,10 @@ class ManualTimetableController extends ChangeNotifier {
   int get breakStart => _breakStart;
   int get breakEnd => _breakEnd;
   String get breakLabel => _breakLabel;
+  int get teachingStart => _teachingStart;
+  int get teachingEnd => _teachingEnd;
+  int get slotDurationMinutes => _slotDurationMinutes;
+  bool get allowStaggeredStartTimes => _allowStaggeredStartTimes;
   bool get avoidBackToBack => _avoidBackToBack;
   bool get preferBalancedWorkload => _preferBalancedWorkload;
   bool get allowCrossDepartmentSharing => _allowCrossDepartmentSharing;
@@ -162,6 +182,7 @@ class ManualTimetableController extends ChangeNotifier {
   TimetableGenerationStatus? get generationStatus => _generationStatus;
   bool get isGenerating => _isGenerating;
   bool get hasGeneratedTimetable => _generationResult != null;
+  bool get needsRegeneration => _needsRegeneration;
   List<TimetableUnassignedRequirement> get unassignedRequirements =>
       _generationResult?.unassignedRequirements ??
       const <TimetableUnassignedRequirement>[];
@@ -169,6 +190,9 @@ class ManualTimetableController extends ChangeNotifier {
       _institutionName.trim().isNotEmpty &&
       _semesterLabel.trim().isNotEmpty &&
       _workingDays.isNotEmpty &&
+      _teachingEnd > _teachingStart &&
+      _slotDurationMinutes > 0 &&
+      _timeSlots.any((slot) => !slot.isBreak) &&
       _breakEnd - _breakStart >= 30 &&
       _faculty.isNotEmpty &&
       _rooms.isNotEmpty &&
@@ -193,7 +217,10 @@ class ManualTimetableController extends ChangeNotifier {
       List<ManualIssue>.unmodifiable(_hardConflicts);
   List<ManualIssue> get softWarnings =>
       List<ManualIssue>.unmodifiable(_softWarnings);
+  List<ManualIssue> get setupIssues =>
+      List<ManualIssue>.unmodifiable(_setupIssues);
   List<ManualIssue> get issues => List<ManualIssue>.unmodifiable(<ManualIssue>[
+    ..._setupIssues,
     ..._hardConflicts,
     ..._softWarnings,
   ]);
@@ -201,6 +228,156 @@ class ManualTimetableController extends ChangeNotifier {
       List<ManualSwapRequest>.unmodifiable(_swapRequests);
 
   ManualBatch? get selectedBatch => _findBatch(_selectedBatchId);
+
+  /// Checks the current setup without generating a timetable. The returned
+  /// issues identify the exact missing entity or load assignment that blocks a
+  /// truthful generation attempt.
+  List<ManualIssue> validateSetup() {
+    final issues = <ManualIssue>[];
+    if (_institutionName.trim().isEmpty) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_INSTITUTION',
+          message: 'Add an institution name before generating.',
+        ),
+      );
+    }
+    if (_semesterLabel.trim().isEmpty) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_SEMESTER',
+          message: 'Add a semester or term before generating.',
+        ),
+      );
+    }
+    if (_workingDays.isEmpty) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_DAYS',
+          message: 'Select at least one working day.',
+        ),
+      );
+    }
+    if (_breakEnd - _breakStart < 30) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_BREAK',
+          message: 'Reserve a mandatory break of at least 30 minutes.',
+        ),
+      );
+    }
+    if (_timeSlots.every((slot) => slot.isBreak)) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_SLOTS',
+          message: 'Define at least one available teaching slot.',
+        ),
+      );
+    }
+    if (_faculty.isEmpty) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_FACULTY',
+          message: 'Add at least one faculty member.',
+        ),
+      );
+    }
+    if (_batches.isEmpty) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_BATCHES',
+          message: 'Add at least one student batch or division.',
+        ),
+      );
+    }
+    if (_subjects.isEmpty) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_SUBJECTS',
+          message: 'Add at least one subject.',
+        ),
+      );
+    }
+    if (_rooms.isEmpty) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_ROOMS',
+          message: 'Add at least one classroom or laboratory.',
+        ),
+      );
+    }
+    if (_requirements.isEmpty) {
+      issues.add(
+        const ManualIssue(
+          code: 'SETUP_REQUIREMENTS',
+          message: 'Add at least one teaching requirement.',
+        ),
+      );
+    }
+
+    final loadMinutes = <String, int>{};
+    for (final requirement in _requirements) {
+      final subject = _findSubject(requirement.subjectId);
+      final faculty = _findFaculty(requirement.facultyId);
+      final batch = _findBatch(requirement.batchId);
+      if (subject == null || faculty == null || batch == null) {
+        issues.add(
+          ManualIssue(
+            code: 'SETUP_REFERENCE',
+            message:
+                'Requirement ${requirement.stableId} references a missing subject, faculty member, or batch.',
+          ),
+        );
+        continue;
+      }
+      final lectureCount = requirement.lectureSessions ?? subject.lectureHours;
+      final labCount =
+          requirement.labSessions ??
+          ((requirement.labHours ?? subject.labHours) > 0 ? 1 : 0);
+      final lectureDuration =
+          requirement.lectureDurationMinutes ??
+          requirement.sessionDurationMinutes ??
+          requirement.durationMinutes ??
+          _slotDurationMinutes;
+      final labDuration =
+          requirement.labDurationMinutes ??
+          requirement.sessionDurationMinutes ??
+          requirement.durationMinutes ??
+          ((requirement.labHours ?? subject.labHours) * 60);
+      if (lectureCount < 0 ||
+          labCount < 0 ||
+          lectureDuration <= 0 ||
+          (labCount > 0 && labDuration <= 0)) {
+        issues.add(
+          ManualIssue(
+            code: 'SETUP_REQUIREMENT_VALUE',
+            message:
+                'Requirement ${requirement.stableId} has an invalid session count or duration.',
+          ),
+        );
+      }
+      loadMinutes[faculty.id] =
+          (loadMinutes[faculty.id] ?? 0) +
+          lectureCount * lectureDuration +
+          labCount * labDuration;
+    }
+    for (final faculty in _faculty) {
+      final minutes = loadMinutes[faculty.id] ?? 0;
+      final target = faculty.maxWeeklyHours * 60;
+      if (target > 0 && minutes > target) {
+        issues.add(
+          ManualIssue(
+            code: 'FACULTY_LOAD_TARGET',
+            message:
+                '${faculty.name} has ${_formatHours(minutes)} of configured teaching against a ${faculty.maxWeeklyHours} hour target.',
+          ),
+        );
+      }
+    }
+    _setupIssues = issues;
+    notifyListeners();
+    return List<ManualIssue>.unmodifiable(issues);
+  }
 
   List<ManualSession> get selectedDaySessions =>
       sessionsFor(batchId: _selectedBatchId, day: _selectedDay);
@@ -270,6 +447,10 @@ class ManualTimetableController extends ChangeNotifier {
     String? institution,
     String? semester,
     Iterable<int>? workingDays,
+    int? teachingStart,
+    int? teachingEnd,
+    int? slotDurationMinutes,
+    bool? allowStaggeredStartTimes,
     int? breakStart,
     int? breakEnd,
     String? breakLabel,
@@ -279,7 +460,14 @@ class ManualTimetableController extends ChangeNotifier {
         : workingDays.where((day) => day >= 0 && day < dayNames.length).toSet();
     final nextStart = breakStart ?? _breakStart;
     final nextEnd = breakEnd ?? _breakEnd;
-    if (nextEnd <= nextStart) return;
+    final nextTeachingStart = teachingStart ?? _teachingStart;
+    final nextTeachingEnd = teachingEnd ?? _teachingEnd;
+    final nextSlotDuration = slotDurationMinutes ?? _slotDurationMinutes;
+    if (nextEnd <= nextStart ||
+        nextTeachingEnd <= nextTeachingStart ||
+        nextSlotDuration <= 0) {
+      return;
+    }
     final changed =
         (institution != null && institution.trim() != _institutionName) ||
         (semester != null && semester.trim() != _semesterLabel) ||
@@ -288,20 +476,26 @@ class ManualTimetableController extends ChangeNotifier {
         !_workingDays.containsAll(nextDays) ||
         nextStart != _breakStart ||
         nextEnd != _breakEnd ||
+        nextTeachingStart != _teachingStart ||
+        nextTeachingEnd != _teachingEnd ||
+        nextSlotDuration != _slotDurationMinutes ||
+        (allowStaggeredStartTimes != null &&
+            allowStaggeredStartTimes != _allowStaggeredStartTimes) ||
         (breakLabel != null && breakLabel.trim() != _breakLabel);
     if (!changed) return;
-    _institutionName = institution?.trim().isNotEmpty == true
-        ? institution!.trim()
-        : _institutionName;
-    _semesterLabel = semester?.trim().isNotEmpty == true
-        ? semester!.trim()
-        : _semesterLabel;
+    _institutionName = institution?.trim() ?? _institutionName;
+    _semesterLabel = semester?.trim() ?? _semesterLabel;
     _workingDays = nextDays;
     _breakStart = nextStart;
     _breakEnd = nextEnd;
     _breakLabel = breakLabel?.trim().isNotEmpty == true
         ? breakLabel!.trim()
         : _breakLabel;
+    _teachingStart = nextTeachingStart;
+    _teachingEnd = nextTeachingEnd;
+    _slotDurationMinutes = nextSlotDuration;
+    _allowStaggeredStartTimes =
+        allowStaggeredStartTimes ?? _allowStaggeredStartTimes;
     _rebuildTimeSlots();
     _invalidateGeneratedTimetable();
     _touchDraft();
@@ -344,12 +538,33 @@ class ManualTimetableController extends ChangeNotifier {
     return true;
   }
 
+  bool addRequirement(TimetableTeachingRequirement requirement) {
+    if (requirement.stableId.trim().isEmpty ||
+        _requirements.any((item) => item.stableId == requirement.stableId)) {
+      return false;
+    }
+    _requirements.add(requirement);
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+    return true;
+  }
+
+  bool removeRequirement(String id) {
+    final before = _requirements.length;
+    _requirements.removeWhere((item) => item.stableId == id || item.id == id);
+    if (_requirements.length == before) return false;
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+    return true;
+  }
+
   bool addSubject(ManualSubject subject) {
     if (subject.id.trim().isEmpty ||
         _subjects.any((item) => item.id == subject.id)) {
       return false;
     }
     _subjects.add(subject);
+    _invalidateGeneratedTimetable();
     _touchDraft();
     return true;
   }
@@ -363,12 +578,35 @@ class ManualTimetableController extends ChangeNotifier {
     return true;
   }
 
+  String? subjectRemovalWarning(String subjectId) {
+    final subject = _findSubject(subjectId);
+    if (subject == null) return null;
+    final requirements = _requirements
+        .where((item) => item.subjectId == subjectId)
+        .length;
+    final sessions = _sessions
+        .where((item) => item.subjectId == subjectId)
+        .length;
+    if (requirements == 0 && sessions == 0) return null;
+    return '${subject.name} is used by $requirements teaching requirement${requirements == 1 ? '' : 's'} and $sessions timetable session${sessions == 1 ? '' : 's'}. Remove or reassign them first.';
+  }
+
+  bool removeSubject(String subjectId) {
+    if (subjectRemovalWarning(subjectId) != null) return false;
+    final before = _subjects.length;
+    _subjects.removeWhere((item) => item.id == subjectId);
+    if (_subjects.length == before) return false;
+    _touchDraft();
+    return true;
+  }
+
   bool addBatch(ManualBatch batch) {
     if (batch.id.trim().isEmpty ||
         _batches.any((item) => item.id == batch.id)) {
       return false;
     }
     _batches.add(batch);
+    _invalidateGeneratedTimetable();
     _touchDraft();
     return true;
   }
@@ -378,6 +616,29 @@ class ManualTimetableController extends ChangeNotifier {
     if (index < 0) return false;
     _batches[index] = batch;
     _invalidateGeneratedTimetable();
+    _touchDraft();
+    return true;
+  }
+
+  String? batchRemovalWarning(String batchId) {
+    final batch = _findBatch(batchId);
+    if (batch == null) return null;
+    final requirements = _requirements
+        .where((item) => item.batchId == batchId)
+        .length;
+    final sessions = _sessions.where((item) => item.batchId == batchId).length;
+    if (requirements == 0 && sessions == 0) return null;
+    return '${batch.name} is used by $requirements teaching requirement${requirements == 1 ? '' : 's'} and $sessions timetable session${sessions == 1 ? '' : 's'}. Remove or reassign them first.';
+  }
+
+  bool removeBatch(String batchId) {
+    if (batchRemovalWarning(batchId) != null) return false;
+    final before = _batches.length;
+    _batches.removeWhere((item) => item.id == batchId);
+    if (_batches.length == before) return false;
+    if (_selectedBatchId == batchId) {
+      _selectedBatchId = _batches.isEmpty ? '' : _batches.first.id;
+    }
     _touchDraft();
     return true;
   }
@@ -432,6 +693,11 @@ class ManualTimetableController extends ChangeNotifier {
       _breakStart = _intOr(map['break_start'], 720);
       _breakEnd = _intOr(map['break_end'], 750);
       _breakLabel = map['break_label'] as String? ?? 'Lunch break';
+      _teachingStart = _intOr(map['teaching_start'], 540);
+      _teachingEnd = _intOr(map['teaching_end'], 920);
+      _slotDurationMinutes = _intOr(map['slot_duration'], 50);
+      _allowStaggeredStartTimes =
+          map['allow_staggered_start_times'] as bool? ?? true;
       _avoidBackToBack = map['avoid_back_to_back'] as bool? ?? true;
       _preferBalancedWorkload =
           map['prefer_balanced_workload'] as bool? ?? true;
@@ -451,6 +717,7 @@ class ManualTimetableController extends ChangeNotifier {
       _savedScenarioLabel = _scenarioLabel;
       _hasUnsavedChanges = false;
       _hasLocalValidation = map['has_local_validation'] as bool? ?? false;
+      _needsRegeneration = map['needs_regeneration'] as bool? ?? false;
       _generationStatus = _decodeGenerationStatus(map['generation_status']);
       _generationIssues = _decodeIssues(map['generation_issues']);
       if (map['generated'] == true && _sessions.isNotEmpty) {
@@ -478,12 +745,17 @@ class ManualTimetableController extends ChangeNotifier {
       _savedBreakStart = _breakStart;
       _savedBreakEnd = _breakEnd;
       _savedBreakLabel = _breakLabel;
+      _savedTeachingStart = _teachingStart;
+      _savedTeachingEnd = _teachingEnd;
+      _savedSlotDurationMinutes = _slotDurationMinutes;
+      _savedAllowStaggeredStartTimes = _allowStaggeredStartTimes;
       _savedAvoidBackToBack = _avoidBackToBack;
       _savedPreferBalancedWorkload = _preferBalancedWorkload;
       _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
       _savedGenerationResult = _generationResult;
       _savedGenerationStatus = _generationStatus;
       _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
+      _savedNeedsRegeneration = _needsRegeneration;
       _refreshIssues();
     } catch (_) {
       // A broken local payload must never prevent the app from opening.
@@ -497,6 +769,9 @@ class ManualTimetableController extends ChangeNotifier {
   /// The method is synchronous because the bounded prototype search is local;
   /// callers can still show [isGenerating] around it for a truthful status.
   TimetableGenerationResult generateTimetable() {
+    final previousSessions = List<ManualSession>.from(_sessions);
+    final hadPreviousResult =
+        _generationResult != null && previousSessions.isNotEmpty;
     _isGenerating = true;
     _generationStatus = null;
     notifyListeners();
@@ -522,7 +797,12 @@ class ManualTimetableController extends ChangeNotifier {
               issue.code != 'WORKLOAD_BALANCE',
         )
         .toList();
-    _sessions = List<ManualSession>.from(result.generatedSessions);
+    if (result.isSuccess || !hadPreviousResult) {
+      _sessions = List<ManualSession>.from(result.generatedSessions);
+    } else {
+      // A failed regeneration must not destroy the last usable timetable.
+      _sessions = previousSessions;
+    }
     _savedSessions = List<ManualSession>.from(_sessions);
     _savedFaculty = List<ManualFaculty>.from(_faculty);
     _savedRooms = List<ManualRoom>.from(_rooms);
@@ -536,14 +816,20 @@ class ManualTimetableController extends ChangeNotifier {
     _savedBreakStart = _breakStart;
     _savedBreakEnd = _breakEnd;
     _savedBreakLabel = _breakLabel;
+    _savedTeachingStart = _teachingStart;
+    _savedTeachingEnd = _teachingEnd;
+    _savedSlotDurationMinutes = _slotDurationMinutes;
+    _savedAllowStaggeredStartTimes = _allowStaggeredStartTimes;
     _savedAvoidBackToBack = _avoidBackToBack;
     _savedPreferBalancedWorkload = _preferBalancedWorkload;
     _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
     _savedGenerationResult = _generationResult;
     _savedGenerationStatus = _generationStatus;
     _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
+    _needsRegeneration = !result.isSuccess;
+    _savedNeedsRegeneration = _needsRegeneration;
     _hasUnsavedChanges = true;
-    _hasLocalValidation = true;
+    _hasLocalValidation = result.isSuccess || !hadPreviousResult;
     _isGenerating = false;
     _refreshIssues();
     notifyListeners();
@@ -559,6 +845,7 @@ class ManualTimetableController extends ChangeNotifier {
     _generationStatus = null;
     _generationIssues = <ManualIssue>[];
     _hasLocalValidation = false;
+    _needsRegeneration = false;
     _touchDraft();
   }
 
@@ -650,6 +937,7 @@ class ManualTimetableController extends ChangeNotifier {
       return false;
     }
     _faculty.add(teacher);
+    _invalidateGeneratedTimetable();
     _touchDraft();
     return true;
   }
@@ -659,6 +947,29 @@ class ManualTimetableController extends ChangeNotifier {
     final index = _faculty.indexWhere((item) => item.id == teacher.id);
     if (index < 0) return false;
     _faculty[index] = teacher;
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+    return true;
+  }
+
+  String? facultyRemovalWarning(String facultyId) {
+    final teacher = _findFaculty(facultyId);
+    if (teacher == null) return null;
+    final requirements = _requirements
+        .where((item) => item.facultyId == facultyId)
+        .length;
+    final sessions = _sessions
+        .where((item) => item.facultyId == facultyId)
+        .length;
+    if (requirements == 0 && sessions == 0) return null;
+    return '${teacher.name} is used by $requirements teaching requirement${requirements == 1 ? '' : 's'} and $sessions timetable session${sessions == 1 ? '' : 's'}. Reassign them first.';
+  }
+
+  bool removeFaculty(String facultyId) {
+    if (facultyRemovalWarning(facultyId) != null) return false;
+    final before = _faculty.length;
+    _faculty.removeWhere((item) => item.id == facultyId);
+    if (_faculty.length == before) return false;
     _touchDraft();
     return true;
   }
@@ -669,6 +980,7 @@ class ManualTimetableController extends ChangeNotifier {
       return false;
     }
     _rooms.add(room);
+    _invalidateGeneratedTimetable();
     _touchDraft();
     return true;
   }
@@ -678,6 +990,25 @@ class ManualTimetableController extends ChangeNotifier {
     final index = _rooms.indexWhere((item) => item.id == room.id);
     if (index < 0) return false;
     _rooms[index] = room;
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+    return true;
+  }
+
+  String? roomRemovalWarning(String roomId) {
+    final room = _findRoom(roomId);
+    if (room == null) return null;
+    final sessions = _sessions.where((item) => item.roomId == roomId).length;
+    return sessions == 0
+        ? null
+        : '${room.name} is assigned to $sessions timetable session${sessions == 1 ? '' : 's'}. Reassign them first.';
+  }
+
+  bool removeRoom(String roomId) {
+    if (roomRemovalWarning(roomId) != null) return false;
+    final before = _rooms.length;
+    _rooms.removeWhere((item) => item.id == roomId);
+    if (_rooms.length == before) return false;
     _touchDraft();
     return true;
   }
@@ -699,12 +1030,17 @@ class ManualTimetableController extends ChangeNotifier {
     _savedBreakStart = _breakStart;
     _savedBreakEnd = _breakEnd;
     _savedBreakLabel = _breakLabel;
+    _savedTeachingStart = _teachingStart;
+    _savedTeachingEnd = _teachingEnd;
+    _savedSlotDurationMinutes = _slotDurationMinutes;
+    _savedAllowStaggeredStartTimes = _allowStaggeredStartTimes;
     _savedAvoidBackToBack = _avoidBackToBack;
     _savedPreferBalancedWorkload = _preferBalancedWorkload;
     _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
     _savedGenerationResult = _generationResult;
     _savedGenerationStatus = _generationStatus;
     _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
+    _savedNeedsRegeneration = _needsRegeneration;
     _hasUnsavedChanges = false;
     notifyListeners();
     try {
@@ -729,6 +1065,10 @@ class ManualTimetableController extends ChangeNotifier {
     _breakStart = _savedBreakStart;
     _breakEnd = _savedBreakEnd;
     _breakLabel = _savedBreakLabel;
+    _teachingStart = _savedTeachingStart;
+    _teachingEnd = _savedTeachingEnd;
+    _slotDurationMinutes = _savedSlotDurationMinutes;
+    _allowStaggeredStartTimes = _savedAllowStaggeredStartTimes;
     _avoidBackToBack = _savedAvoidBackToBack;
     _preferBalancedWorkload = _savedPreferBalancedWorkload;
     _allowCrossDepartmentSharing = _savedAllowCrossDepartmentSharing;
@@ -739,6 +1079,7 @@ class ManualTimetableController extends ChangeNotifier {
     _generationResult = _savedGenerationResult;
     _generationStatus = _savedGenerationStatus;
     _generationIssues = List<ManualIssue>.from(_savedGenerationIssues);
+    _needsRegeneration = _savedNeedsRegeneration;
     _refreshIssues();
     notifyListeners();
   }
@@ -765,12 +1106,17 @@ class ManualTimetableController extends ChangeNotifier {
     _savedBreakStart = _breakStart;
     _savedBreakEnd = _breakEnd;
     _savedBreakLabel = _breakLabel;
+    _savedTeachingStart = _teachingStart;
+    _savedTeachingEnd = _teachingEnd;
+    _savedSlotDurationMinutes = _slotDurationMinutes;
+    _savedAllowStaggeredStartTimes = _allowStaggeredStartTimes;
     _savedAvoidBackToBack = _avoidBackToBack;
     _savedPreferBalancedWorkload = _preferBalancedWorkload;
     _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
     _savedGenerationResult = null;
     _savedGenerationStatus = null;
     _savedGenerationIssues = <ManualIssue>[];
+    _savedNeedsRegeneration = false;
     _hasUnsavedChanges = false;
     _hasLocalValidation = false;
     _scenarioLabel = sampleDataLabel;
@@ -778,6 +1124,7 @@ class ManualTimetableController extends ChangeNotifier {
     _generationResult = null;
     _generationStatus = null;
     _generationIssues = <ManualIssue>[];
+    _needsRegeneration = false;
     _refreshIssues();
     notifyListeners();
     try {
@@ -1062,6 +1409,7 @@ class ManualTimetableController extends ChangeNotifier {
   void _touchDraft() {
     _hasUnsavedChanges = true;
     _hasLocalValidation = false;
+    _setupIssues = <ManualIssue>[];
     _refreshIssues();
     notifyListeners();
   }
@@ -1074,11 +1422,16 @@ class ManualTimetableController extends ChangeNotifier {
     'break_start': _breakStart,
     'break_end': _breakEnd,
     'break_label': _breakLabel,
+    'teaching_start': _teachingStart,
+    'teaching_end': _teachingEnd,
+    'slot_duration': _slotDurationMinutes,
+    'allow_staggered_start_times': _allowStaggeredStartTimes,
     'avoid_back_to_back': _avoidBackToBack,
     'prefer_balanced_workload': _preferBalancedWorkload,
     'allow_cross_department_sharing': _allowCrossDepartmentSharing,
     'scenario_label': _scenarioLabel,
     'generated': _generationResult != null,
+    'needs_regeneration': _needsRegeneration,
     'has_local_validation': _hasLocalValidation,
     'generation_id': _generationResult?.id,
     'generation_status': _generationStatus?.name,
@@ -1471,10 +1824,14 @@ class ManualTimetableController extends ChangeNotifier {
 
   void _rebuildTimeSlots() {
     final slots = <ManualTimeSlot>[];
-    final starts = <int>[540, 600, 660, 750, 810, 870];
+    final step = _slotDurationMinutes + (_allowStaggeredStartTimes ? 10 : 0);
     for (final day in workingDays) {
-      for (final start in starts) {
-        final end = start + 50;
+      for (
+        var start = _teachingStart;
+        start + _slotDurationMinutes <= _teachingEnd;
+        start += step
+      ) {
+        final end = start + _slotDurationMinutes;
         if (_overlaps(start, end, _breakStart, _breakEnd)) continue;
         slots.add(ManualTimeSlot(day: day, startMinute: start, endMinute: end));
       }
@@ -1502,9 +1859,7 @@ class ManualTimetableController extends ChangeNotifier {
 
   void _invalidateGeneratedTimetable() {
     if (_generationResult == null && _sessions.isEmpty) return;
-    _sessions = <ManualSession>[];
-    _generationResult = null;
-    _generationStatus = null;
+    _needsRegeneration = true;
     _generationIssues = <ManualIssue>[];
     _hasLocalValidation = false;
   }
@@ -1746,6 +2101,9 @@ class ManualTimetableController extends ChangeNotifier {
     final minute = (minutes % 60).toString().padLeft(2, '0');
     return '$hour:$minute';
   }
+
+  static String _formatHours(int minutes) =>
+      '${(minutes / 60).toStringAsFixed(minutes % 60 == 0 ? 0 : 1)} h';
 
   void _seedDemoData() {
     _faculty = const <ManualFaculty>[
@@ -2122,7 +2480,13 @@ class ManualTimetableController extends ChangeNotifier {
     _breakStart = 720;
     _breakEnd = 750;
     _breakLabel = 'Lunch break';
-    _requirements = _demoRequirements();
+    _teachingStart = 540;
+    _teachingEnd = 920;
+    _slotDurationMinutes = 50;
+    _allowStaggeredStartTimes = true;
+    _requirements = List<TimetableTeachingRequirement>.from(
+      _demoRequirements(),
+    );
     _sessions = <ManualSession>[];
     _rebuildTimeSlots();
   }

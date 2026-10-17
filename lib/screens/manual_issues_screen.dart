@@ -41,13 +41,14 @@ class ManualIssuesScreen extends StatelessWidget {
         final unassigned = controller.hardConflicts
             .where((issue) => issue.code == 'UNASSIGNED_REQUIREMENT')
             .toList();
-        final hard = controller.hardConflicts
-            .where(
-              (issue) =>
-                  issue.code != 'ROOM_UNAVAILABLE' &&
-                  issue.code != 'UNASSIGNED_REQUIREMENT',
-            )
-            .toList();
+        final hard = <ManualIssue>[
+          ...controller.setupIssues,
+          ...controller.hardConflicts.where(
+            (issue) =>
+                issue.code != 'ROOM_UNAVAILABLE' &&
+                issue.code != 'UNASSIGNED_REQUIREMENT',
+          ),
+        ];
         final soft = controller.softWarnings;
         final proxies = controller.faculty.where((teacher) => teacher.isProxy);
         final swaps = controller.swapRequests;
@@ -72,7 +73,7 @@ class ManualIssuesScreen extends StatelessWidget {
               const SizedBox(height: SynchroSpacing.md),
               _LocalDraftBanner(controller: controller),
               const SizedBox(height: SynchroSpacing.lg),
-              if (!controller.hasGeneratedTimetable)
+              if (!controller.hasGeneratedTimetable && !hasIssues)
                 const EmptyState(
                   title: 'No timetable generated yet',
                   body: 'Generate a timetable from the current setup to see hard conflicts, soft warnings, unassigned sessions, and setup issues here.',

@@ -67,6 +67,13 @@ class GenerateTimetableScreen extends StatelessWidget {
   );
 
   void _generate(BuildContext context) {
+    final setupIssues = controller.validateSetup();
+    if (setupIssues.isNotEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(setupIssues.first.message)));
+      onOpenSetup?.call();
+      return;
+    }
     if (!controller.canGenerate) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -217,7 +224,8 @@ class _GenerationOutcome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final result = controller.generationResult;
-    final success = result?.isSuccess == true;
+    final needsRegeneration = controller.needsRegeneration;
+    final success = result?.isSuccess == true && !needsRegeneration;
     final tone = success ? Tone.good : Tone.warn;
     return Container(
       width: double.infinity,
@@ -241,7 +249,9 @@ class _GenerationOutcome extends StatelessWidget {
             const SizedBox(width: SynchroSpacing.sm),
             Expanded(
               child: Text(
-                result?.message ?? 'Generation completed.',
+                needsRegeneration
+                    ? 'Setup changed. Regenerate to apply the latest local inputs.'
+                    : result?.message ?? 'Generation completed.',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,
@@ -250,7 +260,9 @@ class _GenerationOutcome extends StatelessWidget {
             if (onOpenIssues != null && controller.issues.isNotEmpty)
               TextButton(onPressed: onOpenIssues, child: const Text('Issues')),
             IconButton(
-              tooltip: 'Generate again',
+              tooltip: needsRegeneration
+                  ? 'Regenerate timetable'
+                  : 'Generate again',
               onPressed: onGenerate,
               icon: const Icon(Icons.refresh_outlined),
             ),

@@ -4,7 +4,9 @@ SYNCHRO is a mobile-first smart-campus timetable generator. The active product
 flow is local-first and deterministic: coordinators review college setup,
 faculty loads, batches, subjects, rooms, and teaching requirements; generate a
 schedule; inspect hard conflicts, soft warnings, and unassigned sessions; then
-edit, revalidate, and save a local draft. No account or backend is required.
+edit, revalidate, and save a local draft. The first screen is a demo-only
+sign-in/create-account gate: any valid email and non-empty password are accepted
+in memory, and the password is never persisted. No backend is required.
 The existing FastAPI solver and API client remain in the repository as a
 preserved compatibility boundary and regression surface, but the active UI does
 not call them.
@@ -69,15 +71,17 @@ and uses the available width on real phones.
 The app opens with four primary areas:
 
 1. **Overview** — institution/semester summary, setup progress, collection
-   counts, and the honest current timetable state.
-2. **Setup** — working days, a mandatory break, resource collections, and
-   editable subject/batch/faculty teaching requirements.
+   counts, honest timetable state, and local sign-out.
+2. **Setup** — working days, a mandatory break, editable batches, subjects,
+   faculty, rooms/labs, term rhythm, preferences, and teaching requirements.
 3. **Generate & Timetable** — a real pre-generation hand-off followed by the
    generated day/week timetable and class editor.
 4. **Issues** — hard conflicts, soft warnings, unassigned sessions, and setup
    problems detected in the current result.
 
-The bundled sample data is labelled `DEMO SAMPLE · LOCAL DRAFT ONLY`. The local
+After the demo access screen, the bundled sample data is labelled
+`DEMO SAMPLE · LOCAL DRAFT ONLY`. Sign out clears only the in-memory profile;
+the local timetable draft remains available after signing back in. The local
 generator expands configured teaching requirements and uses bounded,
 deterministic placement with hard checks for faculty, room, batch, break,
 capacity, room type, closure, and absence constraints. It scores soft

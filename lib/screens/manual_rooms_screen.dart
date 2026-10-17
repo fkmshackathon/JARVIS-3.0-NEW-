@@ -8,9 +8,8 @@ import '../widgets/ui.dart';
 /// Room and laboratory management for the local manual timetable draft.
 ///
 /// Room availability is evaluated against the selected day/time and the
-/// controller's actual sessions/closures. Add and edit callbacks are optional
-/// because the T1 controller exposes marking availability, but intentionally has
-/// no room collection mutation methods yet.
+/// controller's actual sessions/closures. Room edits are written back to the
+/// same local controller used by setup and generation.
 class ManualRoomsScreen extends StatefulWidget {
   const ManualRoomsScreen({
     super.key,
@@ -375,7 +374,7 @@ class _ManualRoomsScreenState extends State<ManualRoomsScreen> {
     } else {
       _showMessage(
         context,
-        'Room add/edit is not exposed by this controller yet; no data was changed.',
+        'That room record could not be applied to the local draft.',
       );
     }
   }
@@ -710,14 +709,7 @@ bool _callRoomMethod(
   ManualRoom room, {
   required bool editing,
 }) {
-  final dynamic target = controller;
-  try {
-    // ignore: avoid_dynamic_calls
-    final result = editing ? target.editRoom(room) : target.addRoom(room);
-    return result is bool ? result : true;
-  } on NoSuchMethodError {
-    return false;
-  }
+  return editing ? controller.editRoom(room) : controller.addRoom(room);
 }
 
 class _RoomEditorSheet extends StatefulWidget {

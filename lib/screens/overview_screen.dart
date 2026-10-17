@@ -25,6 +25,7 @@ class OverviewScreen extends StatelessWidget {
     this.onReview,
     this.onOpenWorkload,
     this.onOpenRooms,
+    this.onSignOut,
     this.onReset,
   });
 
@@ -42,6 +43,7 @@ class OverviewScreen extends StatelessWidget {
   final VoidCallback? onReview;
   final VoidCallback? onOpenWorkload;
   final VoidCallback? onOpenRooms;
+  final VoidCallback? onSignOut;
 
   /// Called after the local demo draft has been reset.
   final VoidCallback? onReset;
@@ -69,7 +71,10 @@ class OverviewScreen extends StatelessWidget {
                     40,
                   ),
                   children: [
-                    _OverviewTopbar(onReset: () => _confirmReset(context)),
+                    _OverviewTopbar(
+                      onReset: () => _confirmReset(context),
+                      onSignOut: onSignOut,
+                    ),
                     const SizedBox(height: 30),
                     SynchroFlowHeading(
                       overline: 'OVERVIEW',
@@ -108,14 +113,18 @@ class OverviewScreen extends StatelessWidget {
                     _OverviewActions(
                       readiness: readiness,
                       hasGeneratedTimetable: controller.hasGeneratedTimetable,
+                      needsRegeneration: controller.needsRegeneration,
                       onOpenSetup: onOpenSetup,
                       onGenerate: onGenerate,
                       onReview: onReview,
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      controller.hasGeneratedTimetable
+                      controller.hasGeneratedTimetable &&
+                              !controller.needsRegeneration
                           ? 'The timetable below is derived from the current local setup and can be edited and revalidated.'
+                          : controller.needsRegeneration
+                          ? 'Setup changed. Regenerate the timetable to apply the latest local inputs.'
                           : readiness.isComplete
                           ? 'Setup is ready. No timetable has been generated yet.'
                           : 'Complete the missing prerequisites before generation.',
@@ -162,9 +171,10 @@ class OverviewScreen extends StatelessWidget {
 }
 
 class _OverviewTopbar extends StatelessWidget {
-  const _OverviewTopbar({required this.onReset});
+  const _OverviewTopbar({required this.onReset, this.onSignOut});
 
   final VoidCallback onReset;
+  final VoidCallback? onSignOut;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -182,6 +192,12 @@ class _OverviewTopbar extends StatelessWidget {
         tone: Tone.neutral,
         icon: Icons.edit_note_outlined,
       ),
+      if (onSignOut != null)
+        IconButton(
+          onPressed: onSignOut,
+          tooltip: 'Sign out of local demo',
+          icon: const Icon(Icons.logout_outlined),
+        ),
       const SizedBox(width: SynchroSpacing.xs),
       IconButton(
         onPressed: onReset,
@@ -437,7 +453,9 @@ class _DraftReviewCard extends StatelessWidget {
         : isChecked
         ? Tone.good
         : Tone.neutral;
-    final title = !controller.hasGeneratedTimetable
+    final title = controller.needsRegeneration
+        ? 'Setup changed — regenerate before review'
+        : !controller.hasGeneratedTimetable
         ? 'No timetable generated yet'
         : hard > 0
         ? 'Resolve local conflicts before hand-off'
@@ -446,7 +464,9 @@ class _DraftReviewCard extends StatelessWidget {
         : isChecked
         ? 'Local draft reviewed'
         : 'Draft is ready for a review pass';
-    final detail = !controller.hasGeneratedTimetable
+    final detail = controller.needsRegeneration
+        ? 'A saved timetable exists, but the current setup has changed. Generate again to use the latest inputs.'
+        : !controller.hasGeneratedTimetable
         ? 'Configure the term and run the deterministic local generator to create the first schedule.'
         : hasIssues
         ? '$hard hard conflict${hard == 1 ? '' : 's'} · $soft soft warning${soft == 1 ? '' : 's'}'
@@ -458,7 +478,9 @@ class _DraftReviewCard extends StatelessWidget {
       overline: 'Local draft',
       title: title,
       trailing: StatusChip(
-        label: !controller.hasGeneratedTimetable
+        label: controller.needsRegeneration
+            ? 'Needs regeneration'
+            : !controller.hasGeneratedTimetable
             ? 'Not generated'
             : isChecked
             ? 'Checked locally'
@@ -486,6 +508,7 @@ class _OverviewActions extends StatelessWidget {
   const _OverviewActions({
     required this.readiness,
     required this.hasGeneratedTimetable,
+    required this.needsRegeneration,
     this.onOpenSetup,
     this.onGenerate,
     this.onReview,
@@ -493,6 +516,7 @@ class _OverviewActions extends StatelessWidget {
 
   final SynchroSetupReadiness readiness;
   final bool hasGeneratedTimetable;
+  final bool needsRegeneration;
   final VoidCallback? onOpenSetup;
   final VoidCallback? onGenerate;
   final VoidCallback? onReview;
@@ -500,7 +524,7 @@ class _OverviewActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final canGenerate = readiness.isComplete && onGenerate != null;
-    final primary = hasGeneratedTimetable
+    final primary = hasGeneratedTimetable && !needsRegeneration
         ? onReview
         : canGenerate
         ? onGenerate
@@ -511,14 +535,14 @@ class _OverviewActions extends StatelessWidget {
         FilledButton.icon(
           onPressed: primary,
           icon: Icon(
-            hasGeneratedTimetable
+            hasGeneratedTimetable && !needsRegeneration
                 ? Icons.visibility_outlined
                 : readiness.isComplete
                 ? Icons.auto_awesome_outlined
                 : Icons.arrow_forward_outlined,
           ),
           label: Text(
-            hasGeneratedTimetable
+            hasGeneratedTimetable && !needsRegeneration
                 ? 'Review generated timetable'
                 : readiness.isComplete
                 ? 'Generate timetable'

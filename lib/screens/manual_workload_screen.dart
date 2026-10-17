@@ -7,12 +7,9 @@ import '../widgets/ui.dart';
 
 /// Workload view for the in-memory manual timetable.
 ///
-/// Every number on this screen is derived from [ManualTimetableController.sessions].
-/// The controller currently exposes no faculty mutation API, so the editor
-/// accepts optional integration callbacks and gracefully explains that limitation
-/// when they are not supplied. If a future controller adds `addFaculty` or
-/// `editFaculty`, the small dynamic bridge below uses it without changing this
-/// view's public API.
+/// Every number on this screen is derived from [ManualTimetableController.sessions]
+/// and faculty edits are written back to the same local controller used by setup
+/// and generation.
 class ManualWorkloadScreen extends StatelessWidget {
   const ManualWorkloadScreen({
     super.key,
@@ -185,7 +182,7 @@ class ManualWorkloadScreen extends StatelessWidget {
     } else {
       _showMessage(
         context,
-        'Faculty add/edit is not exposed by this controller yet; no data was changed.',
+        'That faculty record could not be applied to the local draft.',
       );
     }
   }
@@ -407,18 +404,9 @@ bool _callFacultyMethod(
   ManualFaculty faculty, {
   required bool editing,
 }) {
-  // The current T1 controller intentionally has no faculty mutation method.
-  // Keep the call optional so this view can use one when a host supplies it.
-  final dynamic target = controller;
-  try {
-    // ignore: avoid_dynamic_calls
-    final result = editing
-        ? target.editFaculty(faculty)
-        : target.addFaculty(faculty);
-    return result is bool ? result : true;
-  } on NoSuchMethodError {
-    return false;
-  }
+  return editing
+      ? controller.editFaculty(faculty)
+      : controller.addFaculty(faculty);
 }
 
 class _FacultyEditorSheet extends StatefulWidget {

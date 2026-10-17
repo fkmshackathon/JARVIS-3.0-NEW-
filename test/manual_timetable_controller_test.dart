@@ -22,6 +22,81 @@ void main() {
     expect(controller.sessions.length, result.generatedSessions.length);
   });
 
+  test('default setup passes setup validation', () {
+    final controller = ManualTimetableController();
+    final issues = controller.validateSetup();
+    expect(
+      issues,
+      isEmpty,
+      reason: issues.map((issue) => issue.message).join('\n'),
+    );
+  });
+
+  test('edited requirements flow into generation and mark the draft stale', () {
+    final controller = ManualTimetableController();
+    final initial = controller.generateTimetable();
+    expect(initial.isSuccess, isTrue, reason: initial.message);
+
+    final requirement = controller.requirements.first;
+    final initialCount = initial.generatedSessions
+        .where(
+          (session) =>
+              session.subjectId == requirement.subjectId &&
+              session.batchId == requirement.batchId &&
+              session.facultyId == requirement.facultyId,
+        )
+        .length;
+    expect(initialCount, greaterThan(0));
+
+    expect(
+      controller.editRequirement(
+        requirement.copyWith(lectureSessions: initialCount + 1),
+      ),
+      isTrue,
+    );
+    expect(controller.needsRegeneration, isTrue);
+
+    final regenerated = controller.generateTimetable();
+    expect(regenerated.isSuccess, isTrue, reason: regenerated.message);
+    expect(
+      regenerated.generatedSessions
+          .where(
+            (session) =>
+                session.subjectId == requirement.subjectId &&
+                session.batchId == requirement.batchId &&
+                session.facultyId == requirement.facultyId,
+          )
+          .length,
+      greaterThan(initialCount),
+    );
+    expect(controller.needsRegeneration, isFalse);
+  });
+
+  test('failed regeneration preserves the previous timetable', () {
+    final controller = ManualTimetableController();
+    final initial = controller.generateTimetable();
+    expect(initial.isSuccess, isTrue, reason: initial.message);
+    final previousIds = controller.sessions
+        .map((session) => session.id)
+        .toList();
+
+    final requirement = controller.requirements.first;
+    expect(
+      controller.editRequirement(
+        requirement.copyWith(batchId: 'missing-batch'),
+      ),
+      isTrue,
+    );
+
+    final failed = controller.generateTimetable();
+    expect(failed.isSuccess, isFalse);
+    expect(
+      controller.sessions.map((session) => session.id).toList(),
+      previousIds,
+    );
+    expect(controller.needsRegeneration, isTrue);
+  });
+
   test(
     'manual edit invalidates the latest validation and can be discarded',
     () {

@@ -15,9 +15,7 @@ void main() {
     tester,
   ) async {
     _phone(tester);
-    await tester.pumpWidget(const SynchroApp());
-    await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
+    await _bootSignedIn(tester);
 
     expect(find.text('Your scheduling workspace'), findsOneWidget);
     expect(find.text('Overview'), findsOneWidget);
@@ -31,9 +29,7 @@ void main() {
     'timetable is absent before generation and appears after generation',
     (tester) async {
       _phone(tester);
-      await tester.pumpWidget(const SynchroApp());
-      await tester.pump(const Duration(milliseconds: 700));
-      await tester.pumpAndSettle();
+      await _bootSignedIn(tester);
 
       await tester.tap(find.text('Generate & Timetable'));
       await tester.pumpAndSettle();
@@ -54,13 +50,48 @@ void main() {
     },
   );
 
+  testWidgets('signing out and back in preserves the local timetable draft', (
+    tester,
+  ) async {
+    _phone(tester);
+    await _bootSignedIn(tester);
+
+    await tester.tap(find.text('Generate & Timetable'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Generate timetable'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Generate timetable'));
+    await tester.pumpAndSettle();
+    expect(find.text('Generated timetable'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Sign out of local demo').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Welcome to SYNCHRO.'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('access-email-field')),
+      'planner@campus.edu',
+    );
+    await tester.enterText(
+      find.byKey(const Key('access-password-field')),
+      'demo-password',
+    );
+    await tester.tap(find.byKey(const Key('access-submit-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Generate & Timetable'));
+    await tester.pumpAndSettle();
+    expect(find.text('Generated timetable'), findsOneWidget);
+  });
+
   testWidgets('setup exposes editable term rhythm and issues stays honest', (
     tester,
   ) async {
     _phone(tester);
-    await tester.pumpWidget(const SynchroApp());
-    await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
+    await _bootSignedIn(tester);
 
     await tester.tap(find.text('Setup'));
     await tester.pumpAndSettle();
@@ -84,4 +115,20 @@ void _phone(WidgetTester tester) {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
+}
+
+Future<void> _bootSignedIn(WidgetTester tester) async {
+  await tester.pumpWidget(const SynchroApp());
+  await tester.pumpAndSettle();
+  expect(find.text('Welcome to SYNCHRO.'), findsOneWidget);
+  await tester.enterText(
+    find.byKey(const Key('access-email-field')),
+    'planner@campus.edu',
+  );
+  await tester.enterText(
+    find.byKey(const Key('access-password-field')),
+    'demo-password',
+  );
+  await tester.tap(find.byKey(const Key('access-submit-button')));
+  await tester.pumpAndSettle();
 }

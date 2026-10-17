@@ -17,7 +17,14 @@ import 'setup_screen.dart';
 /// starting point; issues, workload, rooms, and change handling stay one tap
 /// away without adding redundant primary tabs.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({
+    super.key,
+    required this.controller,
+    required this.onSignOut,
+  });
+
+  final ManualTimetableController controller;
+  final VoidCallback onSignOut;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -25,8 +32,8 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
-  final ManualTimetableController _manualController =
-      ManualTimetableController();
+
+  ManualTimetableController get _manualController => widget.controller;
 
   static const List<_Destination> _destinations = [
     _Destination('Overview', Icons.home_outlined, Icons.home),
@@ -38,18 +45,6 @@ class _AppShellState extends State<AppShell> {
     ),
     _Destination('Issues', Icons.rule_folder_outlined, Icons.rule_folder),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _manualController.restoreDraft();
-  }
-
-  @override
-  void dispose() {
-    _manualController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +59,7 @@ class _AppShellState extends State<AppShell> {
                 _ShellHeader(
                   index: _index,
                   manualController: _manualController,
+                  onSignOut: widget.onSignOut,
                 ),
               Expanded(
                 child: AnimatedSwitcher(
@@ -111,6 +107,7 @@ class _AppShellState extends State<AppShell> {
       onReview: () => _selectDestination(2),
       onOpenWorkload: _openWorkload,
       onOpenRooms: _openRooms,
+      onSignOut: widget.onSignOut,
       onReset: () {},
     ),
     1 => SetupScreen(
@@ -141,6 +138,16 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _generateAndOpen() {
+    final setupIssues = _manualController.validateSetup();
+    if (setupIssues.isNotEmpty) {
+      _selectDestination(1);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(setupIssues.first.message)));
+      });
+      return;
+    }
     _selectDestination(2);
     if (!_manualController.canGenerate) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -214,18 +221,25 @@ class _Destination {
 }
 
 class _ShellHeader extends StatelessWidget {
-  const _ShellHeader({required this.index, required this.manualController});
+  const _ShellHeader({
+    required this.index,
+    required this.manualController,
+    required this.onSignOut,
+  });
 
   final int index;
   final ManualTimetableController manualController;
+  final VoidCallback onSignOut;
 
   @override
   Widget build(BuildContext context) {
-    final status = manualController.hasLocalValidation
+    final status = manualController.needsRegeneration
+        ? const _ShellStatus(label: 'Needs regen', tone: Tone.warn)
+        : manualController.setupIssues.isNotEmpty
+        ? const _ShellStatus(label: 'Fix setup', tone: Tone.bad)
+        : manualController.hasLocalValidation
         ? _ShellStatus(
-            label: manualController.hardConflicts.isEmpty
-                ? 'Locally checked'
-                : 'Needs fixes',
+            label: manualController.hardConflicts.isEmpty ? 'Checked' : 'Fixes',
             tone: manualController.hardConflicts.isEmpty ? Tone.good : Tone.bad,
           )
         : const _ShellStatus(label: 'Draft', tone: Tone.warn);
@@ -262,6 +276,15 @@ class _ShellHeader extends StatelessWidget {
             ),
           ),
           status,
+          IconButton(
+            tooltip: 'Sign out of local demo',
+            onPressed: onSignOut,
+            icon: const Icon(
+              Icons.logout_outlined,
+              size: 20,
+              color: SynchroColors.onNavyMuted,
+            ),
+          ),
           ValueListenableBuilder<ThemeMode>(
             valueListenable: appThemeMode,
             builder: (context, mode, _) => IconButton(

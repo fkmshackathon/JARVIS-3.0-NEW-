@@ -6,11 +6,11 @@ import '../widgets/ui.dart';
 import 'overview_screen.dart';
 import 'synchro_flow_widgets.dart';
 
-/// Editable setup surface for the four local scheduling collections.
+/// Editable setup surface for the local scheduling collections and term rhythm.
 ///
-/// Term fields and selected days are intentionally kept as screen state because
-/// the existing manual controller owns draft records, not institution settings.
-/// The host can persist or replace those values later through the callbacks.
+/// The controller owns the draft values; this screen only keeps temporary form
+/// state while a picker or text field is being edited before writing changes
+/// back to that shared source of truth.
 class SetupScreen extends StatefulWidget {
   const SetupScreen({
     super.key,
@@ -54,6 +54,10 @@ class _SetupScreenState extends State<SetupScreen> {
   late String _breakLabel;
   late int _breakStart;
   late int _breakEnd;
+  late int _teachingStart;
+  late int _teachingEnd;
+  late int _slotDurationMinutes;
+  late bool _allowStaggeredStartTimes;
 
   ManualTimetableController get controller => widget.controller;
 
@@ -108,6 +112,10 @@ class _SetupScreenState extends State<SetupScreen> {
                       breakLabel: _breakLabel,
                       breakStart: _breakStart,
                       breakEnd: _breakEnd,
+                      teachingStart: _teachingStart,
+                      teachingEnd: _teachingEnd,
+                      slotDurationMinutes: _slotDurationMinutes,
+                      allowStaggeredStartTimes: _allowStaggeredStartTimes,
                       onInstitutionChanged: (value) {
                         controller.updateSetup(institution: value);
                         setState(() {});
@@ -117,6 +125,25 @@ class _SetupScreenState extends State<SetupScreen> {
                         setState(() {});
                       },
                       onDayToggled: _toggleDay,
+                      onTeachingStartChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _teachingStart = value);
+                        controller.updateSetup(teachingStart: value);
+                      },
+                      onTeachingEndChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _teachingEnd = value);
+                        controller.updateSetup(teachingEnd: value);
+                      },
+                      onSlotDurationChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _slotDurationMinutes = value);
+                        controller.updateSetup(slotDurationMinutes: value);
+                      },
+                      onStaggeredChanged: (value) {
+                        setState(() => _allowStaggeredStartTimes = value);
+                        controller.updateSetup(allowStaggeredStartTimes: value);
+                      },
                       onEditBreak: _editBreak,
                     ),
                     const SizedBox(height: 16),
@@ -138,11 +165,14 @@ class _SetupScreenState extends State<SetupScreen> {
                       controller: controller,
                       onEditBatch: _editBatch,
                       onEditSubject: _editSubject,
+                      onAddBatch: _addBatch,
+                      onAddSubject: _addSubject,
                     ),
                     const SizedBox(height: 16),
                     _TeachingRequirementsCard(
                       controller: controller,
                       onEdit: _editRequirement,
+                      onAdd: _addRequirement,
                     ),
                     const SizedBox(height: 24),
                     _SetupActions(
@@ -150,10 +180,13 @@ class _SetupScreenState extends State<SetupScreen> {
                       onSetupComplete: _completeSetup,
                       onGenerate: _generate,
                       onReview: _review,
+                      onSave: _saveSetup,
+                      onDiscard: _discardSetup,
+                      onValidate: _validateSetup,
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'These records are local sample data until the host flow persists or replaces them.',
+                      'Changes stay in the local workspace and are included in the next generation attempt.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
@@ -180,6 +213,10 @@ class _SetupScreenState extends State<SetupScreen> {
     _breakLabel = breakSummary?.label ?? 'Lunch break';
     _breakStart = breakSummary?.startMinute ?? 720;
     _breakEnd = breakSummary?.endMinute ?? 750;
+    _teachingStart = controller.teachingStart;
+    _teachingEnd = controller.teachingEnd;
+    _slotDurationMinutes = controller.slotDurationMinutes;
+    _allowStaggeredStartTimes = controller.allowStaggeredStartTimes;
   }
 
   void _toggleDay(int day, bool selected) {
@@ -478,14 +515,172 @@ class _SetupScreenState extends State<SetupScreen> {
     );
   }
 
+  Future<void> _addRequirement() async {
+    if (controller.subjects.isEmpty ||
+        controller.batches.isEmpty ||
+        controller.faculty.isEmpty) {
+      _showMessage(
+        'Add subjects, batches, and faculty before adding a requirement.',
+      );
+      return;
+    }
+    var subjectId = controller.subjects.first.id;
+    var batchId = controller.batches.first.id;
+    var facultyId = controller.faculty.first.id;
+    final lectureController = TextEditingController(text: '1');
+    final labController = TextEditingController(text: '0');
+    final result = await showModalBottomSheet<_RequirementCreateDraft>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(SynchroRadius.sheet),
+        ),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              SynchroSpacing.gutter,
+              SynchroSpacing.lg,
+              SynchroSpacing.gutter,
+              MediaQuery.viewInsetsOf(context).bottom + SynchroSpacing.gutter,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Add teaching requirement',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: SynchroSpacing.lg),
+                DropdownButtonFormField<String>(
+                  initialValue: subjectId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Subject'),
+                  items: [
+                    for (final subject in controller.subjects)
+                      DropdownMenuItem(
+                        value: subject.id,
+                        child: Text('${subject.code} · ${subject.name}'),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setSheetState(() => subjectId = value);
+                  },
+                ),
+                const SizedBox(height: SynchroSpacing.md),
+                DropdownButtonFormField<String>(
+                  initialValue: batchId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Student batch'),
+                  items: [
+                    for (final batch in controller.batches)
+                      DropdownMenuItem(
+                        value: batch.id,
+                        child: Text(batch.name),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setSheetState(() => batchId = value);
+                  },
+                ),
+                const SizedBox(height: SynchroSpacing.md),
+                DropdownButtonFormField<String>(
+                  initialValue: facultyId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Faculty'),
+                  items: [
+                    for (final teacher in controller.faculty)
+                      DropdownMenuItem(
+                        value: teacher.id,
+                        child: Text(teacher.name),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setSheetState(() => facultyId = value);
+                  },
+                ),
+                const SizedBox(height: SynchroSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: lectureController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Lecture sessions',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: SynchroSpacing.md),
+                    Expanded(
+                      child: TextField(
+                        controller: labController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Lab sessions',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: SynchroSpacing.lg),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(
+                      _RequirementCreateDraft(
+                        subjectId: subjectId,
+                        batchId: batchId,
+                        facultyId: facultyId,
+                        lectureSessions:
+                            int.tryParse(lectureController.text) ?? 0,
+                        labSessions: int.tryParse(labController.text) ?? 0,
+                      ),
+                    ),
+                    child: const Text('Add requirement'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    lectureController.dispose();
+    labController.dispose();
+    if (!mounted || result == null) return;
+    controller.addRequirement(
+      TimetableTeachingRequirement(
+        id: 'req-${DateTime.now().microsecondsSinceEpoch}',
+        subjectId: result.subjectId,
+        batchId: result.batchId,
+        facultyId: result.facultyId,
+        lectureSessions: result.lectureSessions,
+        labSessions: result.labSessions,
+      ),
+    );
+  }
+
   Future<void> _editBatch(ManualBatch batch) async {
-    final nameController = TextEditingController(text: batch.name);
-    final yearController = TextEditingController(text: '${batch.year}');
-    final sizeController = TextEditingController(text: '${batch.size}');
+    await _editBatchForm(batch);
+  }
+
+  Future<void> _addBatch() => _editBatchForm(null);
+
+  Future<void> _editBatchForm(ManualBatch? batch) async {
+    final base =
+        batch ?? const ManualBatch(id: 'new-batch', name: '', year: 1, size: 0);
+    final nameController = TextEditingController(text: base.name);
+    final yearController = TextEditingController(text: '${base.year}');
+    final sizeController = TextEditingController(text: '${base.size}');
     final result = await showDialog<ManualBatch>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Edit student batch'),
+        title: Text(batch == null ? 'Add student batch' : 'Edit student batch'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -514,12 +709,15 @@ class _SetupScreenState extends State<SetupScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(
-              batch.copyWith(
+              base.copyWith(
                 name: nameController.text.trim().isEmpty
-                    ? batch.name
+                    ? base.name
                     : nameController.text.trim(),
-                year: int.tryParse(yearController.text) ?? batch.year,
-                size: int.tryParse(sizeController.text) ?? batch.size,
+                year: int.tryParse(yearController.text) ?? base.year,
+                size: int.tryParse(sizeController.text) ?? base.size,
+                id: batch == null
+                    ? 'batch-${DateTime.now().microsecondsSinceEpoch}'
+                    : base.id,
               ),
             ),
             child: const Text('Save'),
@@ -530,22 +728,35 @@ class _SetupScreenState extends State<SetupScreen> {
     nameController.dispose();
     yearController.dispose();
     sizeController.dispose();
-    if (result != null) controller.editBatch(result);
+    if (result == null) return;
+    if (batch == null) {
+      controller.addBatch(result);
+    } else {
+      controller.editBatch(result);
+    }
   }
 
   Future<void> _editSubject(ManualSubject subject) async {
-    final nameController = TextEditingController(text: subject.name);
-    final codeController = TextEditingController(text: subject.code);
+    await _editSubjectForm(subject);
+  }
+
+  Future<void> _addSubject() => _editSubjectForm(null);
+
+  Future<void> _editSubjectForm(ManualSubject? subject) async {
+    final base =
+        subject ?? const ManualSubject(id: 'new-subject', name: '', code: '');
+    final nameController = TextEditingController(text: base.name);
+    final codeController = TextEditingController(text: base.code);
     final lectureController = TextEditingController(
-      text: '${subject.lectureHours}',
+      text: '${base.lectureHours}',
     );
-    final labController = TextEditingController(text: '${subject.labHours}');
-    var practical = subject.isPractical;
+    final labController = TextEditingController(text: '${base.labHours}');
+    var practical = base.isPractical;
     final result = await showDialog<ManualSubject>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Edit subject'),
+          title: Text(subject == null ? 'Add subject' : 'Edit subject'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -598,19 +809,20 @@ class _SetupScreenState extends State<SetupScreen> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(
-                subject.copyWith(
+                base.copyWith(
                   name: nameController.text.trim().isEmpty
-                      ? subject.name
+                      ? base.name
                       : nameController.text.trim(),
                   code: codeController.text.trim().isEmpty
-                      ? subject.code
+                      ? base.code
                       : codeController.text.trim(),
                   isPractical: practical,
                   lectureHours:
-                      int.tryParse(lectureController.text) ??
-                      subject.lectureHours,
-                  labHours:
-                      int.tryParse(labController.text) ?? subject.labHours,
+                      int.tryParse(lectureController.text) ?? base.lectureHours,
+                  labHours: int.tryParse(labController.text) ?? base.labHours,
+                  id: subject == null
+                      ? 'subject-${DateTime.now().microsecondsSinceEpoch}'
+                      : base.id,
                 ),
               ),
               child: const Text('Save'),
@@ -623,10 +835,20 @@ class _SetupScreenState extends State<SetupScreen> {
     codeController.dispose();
     lectureController.dispose();
     labController.dispose();
-    if (result != null) controller.editSubject(result);
+    if (result == null) return;
+    if (subject == null) {
+      controller.addSubject(result);
+    } else {
+      controller.editSubject(result);
+    }
   }
 
   void _completeSetup() {
+    final issues = controller.validateSetup();
+    if (issues.isNotEmpty) {
+      _showSetupIssues(issues);
+      return;
+    }
     final readiness = _readiness;
     if (!readiness.isComplete) {
       _showMissing(readiness);
@@ -640,6 +862,11 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   void _generate() {
+    final issues = controller.validateSetup();
+    if (issues.isNotEmpty) {
+      _showSetupIssues(issues);
+      return;
+    }
     final readiness = _readiness;
     if (!readiness.isComplete) {
       _showMissing(readiness);
@@ -655,6 +882,32 @@ class _SetupScreenState extends State<SetupScreen> {
   void _showMissing(SynchroSetupReadiness readiness) {
     final labels = readiness.missing.map((item) => item.label).join(', ');
     _showMessage('Complete these first: $labels.');
+  }
+
+  void _showSetupIssues(List<ManualIssue> issues) {
+    _showMessage(issues.first.message);
+  }
+
+  Future<void> _saveSetup() async {
+    await controller.saveDraft();
+    if (mounted) _showMessage('Setup saved locally.');
+  }
+
+  void _discardSetup() {
+    controller.discardDraft();
+    _institutionController.text = controller.institutionName;
+    _semesterController.text = controller.semesterLabel;
+    setState(_loadTermValuesFromController);
+    _showMessage('Unsaved setup changes discarded.');
+  }
+
+  void _validateSetup() {
+    final issues = controller.validateSetup();
+    _showMessage(
+      issues.isEmpty
+          ? 'Setup is valid and ready for generation.'
+          : '${issues.length} setup item${issues.length == 1 ? '' : 's'} need attention.',
+    );
   }
 
   void _showMessage(String message) {
@@ -709,9 +962,17 @@ class _TermEditorCard extends StatelessWidget {
     required this.breakLabel,
     required this.breakStart,
     required this.breakEnd,
+    required this.teachingStart,
+    required this.teachingEnd,
+    required this.slotDurationMinutes,
+    required this.allowStaggeredStartTimes,
     required this.onInstitutionChanged,
     required this.onSemesterChanged,
     required this.onDayToggled,
+    required this.onTeachingStartChanged,
+    required this.onTeachingEndChanged,
+    required this.onSlotDurationChanged,
+    required this.onStaggeredChanged,
     required this.onEditBreak,
   });
 
@@ -721,9 +982,17 @@ class _TermEditorCard extends StatelessWidget {
   final String breakLabel;
   final int breakStart;
   final int breakEnd;
+  final int teachingStart;
+  final int teachingEnd;
+  final int slotDurationMinutes;
+  final bool allowStaggeredStartTimes;
   final ValueChanged<String> onInstitutionChanged;
   final ValueChanged<String> onSemesterChanged;
   final void Function(int day, bool selected) onDayToggled;
+  final ValueChanged<int?> onTeachingStartChanged;
+  final ValueChanged<int?> onTeachingEndChanged;
+  final ValueChanged<int?> onSlotDurationChanged;
+  final ValueChanged<bool> onStaggeredChanged;
   final VoidCallback onEditBreak;
 
   @override
@@ -770,6 +1039,77 @@ class _TermEditorCard extends StatelessWidget {
                 onSelected: (selected) => onDayToggled(day, selected),
               ),
           ],
+        ),
+        const SizedBox(height: SynchroSpacing.lg),
+        Text('Teaching window', style: Theme.of(context).textTheme.labelSmall),
+        const SizedBox(height: SynchroSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                initialValue: teachingStart,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Starts'),
+                items: [
+                  for (final time in _teachingTimes)
+                    DropdownMenuItem(
+                      value: time,
+                      child: Text(
+                        synchroTime(time),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                onChanged: onTeachingStartChanged,
+              ),
+            ),
+            const SizedBox(width: SynchroSpacing.md),
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                initialValue: teachingEnd,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Ends'),
+                items: [
+                  for (final time in _teachingTimes.where(
+                    (time) => time > teachingStart,
+                  ))
+                    DropdownMenuItem(
+                      value: time,
+                      child: Text(
+                        synchroTime(time),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                onChanged: onTeachingEndChanged,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: SynchroSpacing.md),
+        DropdownButtonFormField<int>(
+          initialValue: slotDurationMinutes,
+          decoration: const InputDecoration(
+            labelText: 'Slot duration',
+            prefixIcon: Icon(Icons.timelapse_outlined),
+          ),
+          items: const [
+            DropdownMenuItem(value: 45, child: Text('45 minutes')),
+            DropdownMenuItem(value: 50, child: Text('50 minutes')),
+            DropdownMenuItem(value: 60, child: Text('60 minutes')),
+            DropdownMenuItem(value: 90, child: Text('90 minutes')),
+          ],
+          onChanged: onSlotDurationChanged,
+        ),
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: allowStaggeredStartTimes,
+            onChanged: onStaggeredChanged,
+            title: const Text('Allow staggered batch starts'),
+            subtitle: const Text('Keep a short transition gap between slots.'),
+          ),
         ),
         const SizedBox(height: SynchroSpacing.lg),
         Row(
@@ -1108,17 +1448,45 @@ class _SetupActions extends StatelessWidget {
     required this.onSetupComplete,
     required this.onGenerate,
     required this.onReview,
+    required this.onSave,
+    required this.onDiscard,
+    required this.onValidate,
   });
 
   final SynchroSetupReadiness readiness;
   final VoidCallback onSetupComplete;
   final VoidCallback onGenerate;
   final VoidCallback onReview;
+  final VoidCallback onSave;
+  final VoidCallback onDiscard;
+  final VoidCallback onValidate;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      Wrap(
+        spacing: SynchroSpacing.sm,
+        runSpacing: SynchroSpacing.sm,
+        children: [
+          FilledButton.icon(
+            onPressed: onSave,
+            icon: const Icon(Icons.save_outlined, size: 18),
+            label: const Text('Save setup'),
+          ),
+          OutlinedButton.icon(
+            onPressed: onDiscard,
+            icon: const Icon(Icons.undo_outlined, size: 18),
+            label: const Text('Discard'),
+          ),
+          OutlinedButton.icon(
+            onPressed: onValidate,
+            icon: const Icon(Icons.fact_check_outlined, size: 18),
+            label: const Text('Validate setup'),
+          ),
+        ],
+      ),
+      const SizedBox(height: SynchroSpacing.md),
       FilledButton.icon(
         onPressed: onSetupComplete,
         icon: Icon(
@@ -1151,11 +1519,15 @@ class _EditableSetupRecords extends StatelessWidget {
     required this.controller,
     required this.onEditBatch,
     required this.onEditSubject,
+    required this.onAddBatch,
+    required this.onAddSubject,
   });
 
   final ManualTimetableController controller;
   final ValueChanged<ManualBatch> onEditBatch;
   final ValueChanged<ManualSubject> onEditSubject;
+  final VoidCallback onAddBatch;
+  final VoidCallback onAddSubject;
 
   @override
   Widget build(BuildContext context) => SectionCard(
@@ -1163,6 +1535,25 @@ class _EditableSetupRecords extends StatelessWidget {
     title: 'Batches and subjects',
     child: Column(
       children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Wrap(
+            spacing: SynchroSpacing.sm,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onAddBatch,
+                icon: const Icon(Icons.add, size: 17),
+                label: const Text('Add batch'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onAddSubject,
+                icon: const Icon(Icons.add, size: 17),
+                label: const Text('Add subject'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: SynchroSpacing.sm),
         for (final batch in controller.batches)
           Material(
             type: MaterialType.transparency,
@@ -1210,10 +1601,12 @@ class _TeachingRequirementsCard extends StatelessWidget {
   const _TeachingRequirementsCard({
     required this.controller,
     required this.onEdit,
+    required this.onAdd,
   });
 
   final ManualTimetableController controller;
   final ValueChanged<TimetableTeachingRequirement> onEdit;
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) => SectionCard(
@@ -1221,6 +1614,15 @@ class _TeachingRequirementsCard extends StatelessWidget {
     title: 'Requirements used by generation',
     child: Column(
       children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add, size: 17),
+            label: const Text('Add teaching requirement'),
+          ),
+        ),
+        const SizedBox(height: SynchroSpacing.sm),
         for (
           var index = 0;
           index < controller.requirements.length;
@@ -1309,6 +1711,22 @@ class _RequirementDraft {
   final int? labSessions;
 }
 
+class _RequirementCreateDraft {
+  const _RequirementCreateDraft({
+    required this.subjectId,
+    required this.batchId,
+    required this.facultyId,
+    required this.lectureSessions,
+    required this.labSessions,
+  });
+
+  final String subjectId;
+  final String batchId;
+  final String facultyId;
+  final int lectureSessions;
+  final int labSessions;
+}
+
 class _BreakDraft {
   const _BreakDraft({
     required this.label,
@@ -1335,4 +1753,27 @@ const List<int> _breakTimes = <int>[
   840,
   870,
   900,
+];
+
+const List<int> _teachingTimes = <int>[
+  480,
+  510,
+  540,
+  570,
+  600,
+  630,
+  660,
+  690,
+  720,
+  750,
+  780,
+  810,
+  840,
+  870,
+  900,
+  920,
+  930,
+  960,
+  990,
+  1020,
 ];
