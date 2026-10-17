@@ -75,6 +75,11 @@ void main() {
     expect(find.text('Make the term fit'), findsOneWidget);
     expect(find.text('Working days'), findsWidgets);
     expect(find.text('Break'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('Faculty'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Faculty'), findsOneWidget);
 
     await tester.scrollUntilVisible(

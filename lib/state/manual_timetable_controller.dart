@@ -56,6 +56,9 @@ class ManualTimetableController extends ChangeNotifier {
     _savedBreakStart = _breakStart;
     _savedBreakEnd = _breakEnd;
     _savedBreakLabel = _breakLabel;
+    _savedAvoidBackToBack = _avoidBackToBack;
+    _savedPreferBalancedWorkload = _preferBalancedWorkload;
+    _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
     _savedGenerationResult = _generationResult;
     _savedGenerationStatus = _generationStatus;
     _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
@@ -111,12 +114,18 @@ class ManualTimetableController extends ChangeNotifier {
   int _breakStart = 720;
   int _breakEnd = 750;
   String _breakLabel = 'Lunch break';
+  bool _avoidBackToBack = true;
+  bool _preferBalancedWorkload = true;
+  bool _allowCrossDepartmentSharing = true;
   String _savedInstitutionName = defaultInstitution;
   String _savedSemesterLabel = defaultSemester;
   Set<int> _savedWorkingDays = <int>{0, 1, 2, 3, 4, 5};
   int _savedBreakStart = 720;
   int _savedBreakEnd = 750;
   String _savedBreakLabel = 'Lunch break';
+  bool _savedAvoidBackToBack = true;
+  bool _savedPreferBalancedWorkload = true;
+  bool _savedAllowCrossDepartmentSharing = true;
   TimetableGenerationResult? _generationResult;
   TimetableGenerationStatus? _generationStatus;
   List<ManualIssue> _generationIssues = <ManualIssue>[];
@@ -144,6 +153,9 @@ class ManualTimetableController extends ChangeNotifier {
   int get breakStart => _breakStart;
   int get breakEnd => _breakEnd;
   String get breakLabel => _breakLabel;
+  bool get avoidBackToBack => _avoidBackToBack;
+  bool get preferBalancedWorkload => _preferBalancedWorkload;
+  bool get allowCrossDepartmentSharing => _allowCrossDepartmentSharing;
   List<TimetableTeachingRequirement> get requirements =>
       List<TimetableTeachingRequirement>.unmodifiable(_requirements);
   TimetableGenerationResult? get generationResult => _generationResult;
@@ -295,6 +307,26 @@ class ManualTimetableController extends ChangeNotifier {
     _touchDraft();
   }
 
+  void updatePreferences({
+    bool? avoidBackToBack,
+    bool? preferBalancedWorkload,
+    bool? allowCrossDepartmentSharing,
+  }) {
+    final changed =
+        (avoidBackToBack != null && avoidBackToBack != _avoidBackToBack) ||
+        (preferBalancedWorkload != null &&
+            preferBalancedWorkload != _preferBalancedWorkload) ||
+        (allowCrossDepartmentSharing != null &&
+            allowCrossDepartmentSharing != _allowCrossDepartmentSharing);
+    if (!changed) return;
+    _avoidBackToBack = avoidBackToBack ?? _avoidBackToBack;
+    _preferBalancedWorkload = preferBalancedWorkload ?? _preferBalancedWorkload;
+    _allowCrossDepartmentSharing =
+        allowCrossDepartmentSharing ?? _allowCrossDepartmentSharing;
+    _invalidateGeneratedTimetable();
+    _touchDraft();
+  }
+
   void setRequirements(List<TimetableTeachingRequirement> requirements) {
     _requirements = List<TimetableTeachingRequirement>.from(requirements);
     _invalidateGeneratedTimetable();
@@ -400,6 +432,11 @@ class ManualTimetableController extends ChangeNotifier {
       _breakStart = _intOr(map['break_start'], 720);
       _breakEnd = _intOr(map['break_end'], 750);
       _breakLabel = map['break_label'] as String? ?? 'Lunch break';
+      _avoidBackToBack = map['avoid_back_to_back'] as bool? ?? true;
+      _preferBalancedWorkload =
+          map['prefer_balanced_workload'] as bool? ?? true;
+      _allowCrossDepartmentSharing =
+          map['allow_cross_department_sharing'] as bool? ?? true;
       _rebuildTimeSlots();
       _selectedBatchId =
           _batches.any((batch) => batch.id == map['selected_batch_id'])
@@ -441,6 +478,9 @@ class ManualTimetableController extends ChangeNotifier {
       _savedBreakStart = _breakStart;
       _savedBreakEnd = _breakEnd;
       _savedBreakLabel = _breakLabel;
+      _savedAvoidBackToBack = _avoidBackToBack;
+      _savedPreferBalancedWorkload = _preferBalancedWorkload;
+      _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
       _savedGenerationResult = _generationResult;
       _savedGenerationStatus = _generationStatus;
       _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
@@ -468,6 +508,9 @@ class ManualTimetableController extends ChangeNotifier {
         subjects: _subjects,
         timeSlots: _timeSlots,
         requirements: _requirements,
+        avoidBackToBack: _avoidBackToBack,
+        preferBalancedWorkload: _preferBalancedWorkload,
+        allowCrossDepartmentSharing: _allowCrossDepartmentSharing,
       ),
     );
     _generationResult = result;
@@ -493,6 +536,9 @@ class ManualTimetableController extends ChangeNotifier {
     _savedBreakStart = _breakStart;
     _savedBreakEnd = _breakEnd;
     _savedBreakLabel = _breakLabel;
+    _savedAvoidBackToBack = _avoidBackToBack;
+    _savedPreferBalancedWorkload = _preferBalancedWorkload;
+    _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
     _savedGenerationResult = _generationResult;
     _savedGenerationStatus = _generationStatus;
     _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
@@ -653,6 +699,9 @@ class ManualTimetableController extends ChangeNotifier {
     _savedBreakStart = _breakStart;
     _savedBreakEnd = _breakEnd;
     _savedBreakLabel = _breakLabel;
+    _savedAvoidBackToBack = _avoidBackToBack;
+    _savedPreferBalancedWorkload = _preferBalancedWorkload;
+    _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
     _savedGenerationResult = _generationResult;
     _savedGenerationStatus = _generationStatus;
     _savedGenerationIssues = List<ManualIssue>.from(_generationIssues);
@@ -680,6 +729,9 @@ class ManualTimetableController extends ChangeNotifier {
     _breakStart = _savedBreakStart;
     _breakEnd = _savedBreakEnd;
     _breakLabel = _savedBreakLabel;
+    _avoidBackToBack = _savedAvoidBackToBack;
+    _preferBalancedWorkload = _savedPreferBalancedWorkload;
+    _allowCrossDepartmentSharing = _savedAllowCrossDepartmentSharing;
     _rebuildTimeSlots();
     _scenarioLabel = _savedScenarioLabel;
     _hasUnsavedChanges = false;
@@ -713,6 +765,9 @@ class ManualTimetableController extends ChangeNotifier {
     _savedBreakStart = _breakStart;
     _savedBreakEnd = _breakEnd;
     _savedBreakLabel = _breakLabel;
+    _savedAvoidBackToBack = _avoidBackToBack;
+    _savedPreferBalancedWorkload = _preferBalancedWorkload;
+    _savedAllowCrossDepartmentSharing = _allowCrossDepartmentSharing;
     _savedGenerationResult = null;
     _savedGenerationStatus = null;
     _savedGenerationIssues = <ManualIssue>[];
@@ -1019,6 +1074,9 @@ class ManualTimetableController extends ChangeNotifier {
     'break_start': _breakStart,
     'break_end': _breakEnd,
     'break_label': _breakLabel,
+    'avoid_back_to_back': _avoidBackToBack,
+    'prefer_balanced_workload': _preferBalancedWorkload,
+    'allow_cross_department_sharing': _allowCrossDepartmentSharing,
     'scenario_label': _scenarioLabel,
     'generated': _generationResult != null,
     'has_local_validation': _hasLocalValidation,

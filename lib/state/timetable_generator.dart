@@ -142,6 +142,9 @@ class TimetableGenerationInput {
     this.requirements = const <TimetableTeachingRequirement>[],
     this.existingSessions = const <ManualSession>[],
     this.sessions = const <ManualSession>[],
+    this.avoidBackToBack = true,
+    this.preferBalancedWorkload = true,
+    this.allowCrossDepartmentSharing = true,
     this.maxSearchNodes = 20000,
     this.maxCandidatesPerRequirement = 256,
   });
@@ -158,6 +161,9 @@ class TimetableGenerationInput {
   final List<TimetableTeachingRequirement> requirements;
   final List<ManualSession> existingSessions;
   final List<ManualSession> sessions;
+  final bool avoidBackToBack;
+  final bool preferBalancedWorkload;
+  final bool allowCrossDepartmentSharing;
   final int maxSearchNodes;
   final int maxCandidatesPerRequirement;
 
@@ -905,7 +911,8 @@ class _GenerationRun {
     final department = item.requirement.department?.trim() ?? '';
     final wanted = department.isNotEmpty ? department : item.batch.department;
     if (wanted.trim().isEmpty || room.department.trim().isEmpty) return true;
-    return room.department == wanted || room.borrowable;
+    return room.department == wanted ||
+        (input.allowCrossDepartmentSharing && room.borrowable);
   }
 
   int _preferenceScore(_WorkItem item, _Window window, ManualRoom room) {
@@ -990,8 +997,9 @@ class _GenerationRun {
         _facultySessions[option.item.faculty.id] ?? const <ManualSession>[];
     for (final session in facultySessions) {
       if (session.day != option.window.day) continue;
-      if (session.endMinute == option.window.startMinute ||
-          option.window.endMinute == session.startMinute) {
+      if (input.avoidBackToBack &&
+          (session.endMinute == option.window.startMinute ||
+              option.window.endMinute == session.startMinute)) {
         score += 10;
       }
     }
@@ -1000,7 +1008,9 @@ class _GenerationRun {
         ? 0
         : _facultyLoads.values.reduce((left, right) => left + right) /
               _facultyLoads.length;
-    if (currentLoad > average) score += ((currentLoad - average) / 30).ceil();
+    if (input.preferBalancedWorkload && currentLoad > average) {
+      score += ((currentLoad - average) / 30).ceil();
+    }
     return score;
   }
 
@@ -1121,13 +1131,14 @@ class _GenerationRun {
         if (first.facultyId != second.facultyId || first.day != second.day) {
           continue;
         }
-        if (first.endMinute == second.startMinute ||
-            second.endMinute == first.startMinute) {
+        if (input.avoidBackToBack &&
+            (first.endMinute == second.startMinute ||
+                second.endMinute == first.startMinute)) {
           score += 10;
         }
       }
     }
-    if (loads.length > 1) {
+    if (input.preferBalancedWorkload && loads.length > 1) {
       final values = loads.values.toList()..sort();
       score += (values.last - values.first) ~/ 30;
     }
@@ -1430,6 +1441,7 @@ class _GenerationRun {
         'slot:${slot.day}:${slot.startMinute}:${slot.endMinute}:${slot.isBreak}',
       for (final slot in input.allBreakSlots)
         'break:${slot.day}:${slot.startMinute}:${slot.endMinute}:${slot.isBreak}',
+      'preference:${input.avoidBackToBack}:${input.preferBalancedWorkload}:${input.allowCrossDepartmentSharing}',
       for (final requirement in input.requirements)
         'requirement:${requirement.stableId}:${requirement.subjectId}:${requirement.batchId}:${requirement.facultyId}:${requirement.lectureHours}:${requirement.labHours}:${requirement.lectureSessions}:${requirement.labSessions}:${requirement.isPractical}:${requirement.practical}:${requirement.sessionDurationMinutes}:${requirement.durationMinutes}:${requirement.lectureDurationMinutes}:${requirement.labDurationMinutes}:${requirement.department}:${requirement.preferredDays.join(',')}:${requirement.preferredStartMinutes.join(',')}:${requirement.preferredRoomIds.join(',')}',
       for (final session in input.allExistingSessions)

@@ -120,6 +120,8 @@ class _SetupScreenState extends State<SetupScreen> {
                       onEditBreak: _editBreak,
                     ),
                     const SizedBox(height: 16),
+                    _SchedulingPreferencesCard(controller: controller),
+                    const SizedBox(height: 16),
                     _SetupReadinessCard(
                       readiness: readiness,
                       onReview: _review,
@@ -804,6 +806,71 @@ class _TermEditorCard extends StatelessWidget {
   );
 }
 
+class _SchedulingPreferencesCard extends StatelessWidget {
+  const _SchedulingPreferencesCard({required this.controller});
+
+  final ManualTimetableController controller;
+
+  @override
+  Widget build(BuildContext context) => SectionCard(
+    overline: 'Constraints and preferences',
+    title: 'Keep the week workable',
+    child: Column(
+      children: [
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: controller.avoidBackToBack,
+            onChanged: (value) =>
+                controller.updatePreferences(avoidBackToBack: value),
+            title: const Text('Avoid back-to-back faculty lectures'),
+            subtitle: const Text(
+              'Soft preference; hard clashes are always blocked.',
+            ),
+          ),
+        ),
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: controller.preferBalancedWorkload,
+            onChanged: (value) =>
+                controller.updatePreferences(preferBalancedWorkload: value),
+            title: const Text('Balance faculty workload'),
+            subtitle: const Text(
+              'Prefer reasonable teaching distribution where possible.',
+            ),
+          ),
+        ),
+        Material(
+          type: MaterialType.transparency,
+          child: SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: controller.allowCrossDepartmentSharing,
+            onChanged: (value) => controller.updatePreferences(
+              allowCrossDepartmentSharing: value,
+            ),
+            title: const Text('Allow cross-department room sharing'),
+            subtitle: const Text(
+              'Borrow compatible vacant rooms and labs when needed.',
+            ),
+          ),
+        ),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: EdgeInsets.only(top: SynchroSpacing.sm),
+            child: Text(
+              'Hard rules: no faculty, room, batch, break, capacity, or lab clashes. Staggered starts are supported by the configured slot grid.',
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class _SetupReadinessCard extends StatelessWidget {
   const _SetupReadinessCard({required this.readiness, required this.onReview});
 
@@ -1097,35 +1164,41 @@ class _EditableSetupRecords extends StatelessWidget {
     child: Column(
       children: [
         for (final batch in controller.batches)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.groups_outlined),
-            title: Text(batch.name),
-            subtitle: Text('${batch.year} year · ${batch.size} students'),
-            trailing: IconButton(
-              onPressed: () => onEditBatch(batch),
-              tooltip: 'Edit batch',
-              icon: const Icon(Icons.edit_outlined, size: 18),
+          Material(
+            type: MaterialType.transparency,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.groups_outlined),
+              title: Text(batch.name),
+              subtitle: Text('${batch.year} year · ${batch.size} students'),
+              trailing: IconButton(
+                onPressed: () => onEditBatch(batch),
+                tooltip: 'Edit batch',
+                icon: const Icon(Icons.edit_outlined, size: 18),
+              ),
             ),
           ),
         if (controller.batches.isNotEmpty && controller.subjects.isNotEmpty)
           const Divider(height: SynchroSpacing.lg),
         for (final subject in controller.subjects)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              subject.isPractical
-                  ? Icons.science_outlined
-                  : Icons.menu_book_outlined,
-            ),
-            title: Text('${subject.code} · ${subject.name}'),
-            subtitle: Text(
-              '${subject.lectureHours} lecture h · ${subject.labHours} lab h',
-            ),
-            trailing: IconButton(
-              onPressed: () => onEditSubject(subject),
-              tooltip: 'Edit subject',
-              icon: const Icon(Icons.edit_outlined, size: 18),
+          Material(
+            type: MaterialType.transparency,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                subject.isPractical
+                    ? Icons.science_outlined
+                    : Icons.menu_book_outlined,
+              ),
+              title: Text('${subject.code} · ${subject.name}'),
+              subtitle: Text(
+                '${subject.lectureHours} lecture h · ${subject.labHours} lab h',
+              ),
+              trailing: IconButton(
+                onPressed: () => onEditSubject(subject),
+                tooltip: 'Edit subject',
+                icon: const Icon(Icons.edit_outlined, size: 18),
+              ),
             ),
           ),
       ],
