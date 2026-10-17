@@ -12,7 +12,9 @@ void main() {
     appThemeMode.value = ThemeMode.light;
   });
 
-  testWidgets('starts with the local sign-in and sign-up pages', (tester) async {
+  testWidgets('starts with the local sign-in and sign-up pages', (
+    tester,
+  ) async {
     _phone(tester);
     await tester.pumpWidget(const SynchroApp());
     await tester.pumpAndSettle();
@@ -162,7 +164,11 @@ void main() {
 
     final signOutFinder = find.byTooltip('Sign out');
     final demoSignOutFinder = find.byTooltip('Sign out of local demo');
-    await tester.tap(signOutFinder.evaluate().isNotEmpty ? signOutFinder.first : demoSignOutFinder.first);
+    await tester.tap(
+      signOutFinder.evaluate().isNotEmpty
+          ? signOutFinder.first
+          : demoSignOutFinder.first,
+    );
     await tester.pumpAndSettle();
     expect(find.text('Welcome to SYNCHRO.'), findsOneWidget);
 

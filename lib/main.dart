@@ -44,9 +44,11 @@ class _SynchroAppState extends State<SynchroApp> {
   void initState() {
     super.initState();
     _session.addListener(_sessionChanged);
-    unawaited(_library.restore().then((_) {
-      if (mounted) setState(() => _workspaceReady = true);
-    }));
+    unawaited(
+      _library.restore().then((_) {
+        if (mounted) setState(() => _workspaceReady = true);
+      }),
+    );
   }
 
   void _sessionChanged() {
@@ -87,7 +89,10 @@ class _SynchroAppState extends State<SynchroApp> {
             child: Stack(
               children: [
                 child ?? const SizedBox.shrink(),
-                if (!kIsWeb && _session.isSignedIn && _workspaceReady && !_assistantOpen)
+                if (!kIsWeb &&
+                    _session.isSignedIn &&
+                    _workspaceReady &&
+                    !_assistantOpen)
                   Positioned(
                     left: 16,
                     bottom: 92,
@@ -134,18 +139,22 @@ class _SynchroAppState extends State<SynchroApp> {
 
   Widget _authenticationHome() {
     if (!_session.isSignedIn) {
-      return AccessScreen(
-        session: _session,
-        onAuthenticated: () {},
-      );
+      return AccessScreen(session: _session, onAuthenticated: () {});
     }
     final library = _library;
     if (!_workspaceReady) {
-      return const Scaffold(body: Center(child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [CircularProgressIndicator(), SizedBox(height: 16),
-          Text('Loading your timetables…')],
-      )));
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading your timetables…'),
+            ],
+          ),
+        ),
+      );
     }
     return AppShell(
       library: library,
